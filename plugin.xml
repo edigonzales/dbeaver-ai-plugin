@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?eclipse version="3.4"?>
+<plugin>
+
+  <extension point="org.eclipse.core.runtime.preferences">
+    <initializer class="ch.so.agi.dbeaver.ai.config.AiPreferenceInitializer"/>
+  </extension>
+
+  <extension point="org.eclipse.ui.preferencePages">
+    <page
+        id="ch.so.agi.dbeaver.ai.preferences.main"
+        name="AI Chat"
+        category="org.jkiss.dbeaver.preferences.main"
+        class="ch.so.agi.dbeaver.ai.config.AiPreferencePageMain"/>
+  </extension>
+
+  <extension point="org.eclipse.ui.commands">
+    <category id="ch.so.agi.dbeaver.ai.commands.category" name="AI"/>
+
+    <command
+        id="ch.so.agi.dbeaver.ai.commands.openChat"
+        name="Open AI Chat"
+        categoryId="ch.so.agi.dbeaver.ai.commands.category"/>
+
+    <command
+        id="ch.so.agi.dbeaver.ai.commands.askWithSelection"
+        name="Ask AI About Selection"
+        categoryId="ch.so.agi.dbeaver.ai.commands.category"/>
+  </extension>
+
+  <extension point="org.eclipse.ui.handlers">
+    <handler
+        commandId="ch.so.agi.dbeaver.ai.commands.openChat"
+        class="ch.so.agi.dbeaver.ai.ui.OpenAiChatViewHandler"/>
+
+    <handler
+        commandId="ch.so.agi.dbeaver.ai.commands.askWithSelection"
+        class="ch.so.agi.dbeaver.ai.ui.AskWithSelectionHandler"/>
+  </extension>
+
+  <extension point="org.eclipse.ui.views">
+    <view
+        id="ch.so.agi.dbeaver.ai.views.chat"
+        name="AI Chat"
+        category="org.jkiss.dbeaver.core.category"
+        class="ch.so.agi.dbeaver.ai.ui.AiChatViewPart"
+        icon="platform:/plugin/org.jkiss.dbeaver.model.ai/icons/ai.svg"/>
+  </extension>
+
+  <extension point="org.eclipse.ui.menus">
+    <menuContribution allPopups="false" locationURI="toolbar:dbeaver-general?after=sql_tools">
+      <command
+          id="ch.so.agi.dbeaver.ai.toolbars.openChat"
+          commandId="ch.so.agi.dbeaver.ai.commands.openChat"
+          icon="platform:/plugin/org.jkiss.dbeaver.model.ai/icons/ai.svg"
+          tooltip="Open AI Chat"/>
+    </menuContribution>
+    <menuContribution allPopups="false" locationURI="menu:window?after=additions">
+      <command commandId="ch.so.agi.dbeaver.ai.commands.openChat"/>
+      <command commandId="ch.so.agi.dbeaver.ai.commands.askWithSelection"/>
+    </menuContribution>
+    <menuContribution allPopups="false" locationURI="menu:edit?after=find.ext">
+      <command commandId="ch.so.agi.dbeaver.ai.commands.askWithSelection"/>
+    </menuContribution>
+  </extension>
+
+  <extension point="org.eclipse.ui.perspectiveExtensions">
+    <perspectiveExtension targetID="org.jkiss.dbeaver.core.perspective">
+      <viewShortcut id="ch.so.agi.dbeaver.ai.views.chat"/>
+    </perspectiveExtension>
+  </extension>
+
+  <extension point="org.eclipse.ui.commandImages">
+    <image commandId="ch.so.agi.dbeaver.ai.commands.openChat" icon="platform:/plugin/org.jkiss.dbeaver.model.ai/icons/ai.svg"/>
+    <image commandId="ch.so.agi.dbeaver.ai.commands.askWithSelection" icon="platform:/plugin/org.jkiss.dbeaver.model.ai/icons/ai.svg"/>
+  </extension>
+
+  <extension point="org.eclipse.ui.bindings">
+    <key
+      commandId="ch.so.agi.dbeaver.ai.commands.openChat"
+      contextId="org.eclipse.ui.contexts.window"
+      schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
+      sequence="M1+M2+A"/>
+  </extension>
+
+  <extension point="org.jkiss.dbeaver.toolBarConfiguration">
+    <toolBar key="sqlEditor.side.top">
+      <item commandId="ch.so.agi.dbeaver.ai.commands.openChat" defaultVisibility="true"/>
+    </toolBar>
+  </extension>
+
+</plugin>

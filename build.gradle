@@ -1,0 +1,99 @@
+plugins {
+    id 'java'
+}
+
+group = 'ch.so.agi.dbeaver'
+version = '0.1.0-SNAPSHOT'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+def dbeaverPluginsDir = (findProperty('dbeaverPluginsDir')
+    ?: System.getenv('DBEAVER_PLUGINS_DIR')
+    ?: '/Applications/DBeaver.app/Contents/Eclipse/plugins') as String
+
+def hasDbeaverPlugins = file(dbeaverPluginsDir).exists()
+
+dependencies {
+    implementation 'dev.langchain4j:langchain4j:1.11.0'
+    implementation 'dev.langchain4j:langchain4j-open-ai:1.11.0'
+
+    if (hasDbeaverPlugins) {
+        compileOnly fileTree(dir: dbeaverPluginsDir, include: ['*.jar'])
+        testCompileOnly fileTree(dir: dbeaverPluginsDir, include: ['*.jar'])
+        testRuntimeOnly fileTree(dir: dbeaverPluginsDir, include: ['*.jar'])
+    }
+
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.12.0'
+    testImplementation 'org.assertj:assertj-core:3.27.3'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.12.0'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+sourceSets {
+    main {
+        java {
+            srcDirs = ['src']
+        }
+    }
+    test {
+        java {
+            srcDirs = ['test']
+        }
+    }
+}
+
+test {
+    useJUnitPlatform()
+}
+
+configurations {
+    bundleLibs {
+        canBeConsumed = false
+        canBeResolved = true
+    }
+}
+
+dependencies {
+    bundleLibs 'dev.langchain4j:langchain4j:1.11.0'
+    bundleLibs 'dev.langchain4j:langchain4j-open-ai:1.11.0'
+}
+
+tasks.register('syncBundleLibs', Copy) {
+    from(configurations.bundleLibs)
+    into(layout.projectDirectory.dir('lib'))
+}
+
+tasks.register('printBundleClassPath') {
+    dependsOn('syncBundleLibs')
+    doLast {
+        def jars = fileTree(layout.projectDirectory.dir('lib')).matching { include '*.jar' }.files
+            .collect { "lib/${it.name}" }
+            .sort()
+
+        if (jars.isEmpty()) {
+            println 'Bundle-ClassPath: .'
+            return
+        }
+
+        println 'Bundle-ClassPath: .,'
+        jars.eachWithIndex { entry, index ->
+            def suffix = index < jars.size() - 1 ? ',' : ''
+            println " ${entry}${suffix}"
+        }
+    }
+}
+
+tasks.named('test') {
+    dependsOn('syncBundleLibs')
+}
