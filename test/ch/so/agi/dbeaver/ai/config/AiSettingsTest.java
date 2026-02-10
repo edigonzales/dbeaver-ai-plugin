@@ -18,6 +18,7 @@ class AiSettingsTest {
             true,
             -1,
             10,
+            -5,
             9.0
         );
 
@@ -29,6 +30,7 @@ class AiSettingsTest {
         assertThat(settings.maxColumnsPerSample()).isEqualTo(1);
         assertThat(settings.historySize()).isEqualTo(0);
         assertThat(settings.maxContextTokens()).isEqualTo(100);
+        assertThat(settings.mentionProposalLimit()).isEqualTo(1);
         assertThat(settings.temperature()).isEqualTo(2.0);
     }
 }

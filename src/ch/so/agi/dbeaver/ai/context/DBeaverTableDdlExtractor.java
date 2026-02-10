@@ -27,14 +27,14 @@ public final class DBeaverTableDdlExtractor implements TableDdlExtractor {
         String ddl = null;
         try {
             ddl = DBStructUtils.generateObjectDDL(monitor, entity, new LinkedHashMap<>(), true);
-        } catch (DBException ex) {
+        } catch (Exception ex) {
             LOG.debug("generateObjectDDL failed, trying getTableDDL fallback", ex);
         }
 
         if (ddl == null || ddl.isBlank()) {
             try {
                 ddl = DBStructUtils.getTableDDL(monitor, entity, new LinkedHashMap<>(), true);
-            } catch (DBException ex) {
+            } catch (Exception ex) {
                 LOG.debug("getTableDDL failed, using metadata fallback", ex);
             }
         }

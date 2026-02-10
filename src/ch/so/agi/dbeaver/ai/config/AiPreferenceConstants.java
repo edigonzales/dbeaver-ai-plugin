@@ -15,6 +15,7 @@ public final class AiPreferenceConstants {
 
     public static final String PREF_HISTORY_SIZE = "ch.so.agi.dbeaver.ai.historySize";
     public static final String PREF_MAX_CONTEXT_TOKENS = "ch.so.agi.dbeaver.ai.maxContextTokens";
+    public static final String PREF_MENTION_PROPOSAL_LIMIT = "ch.so.agi.dbeaver.ai.mentionProposalLimit";
     public static final String PREF_TEMPERATURE = "ch.so.agi.dbeaver.ai.temperature";
 
     public static final String SECRET_OPENAI_API_TOKEN = "ch.so.agi.dbeaver.ai.openai.apiToken";

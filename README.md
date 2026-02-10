@@ -78,6 +78,7 @@ Alle Settings (UI, Key, Default, Verhalten):
 | Max Columns per Sample | `ch.so.agi.dbeaver.ai.maxColumnsPerSample` | `30` | Max. Spaltenanzahl pro Sample-Row-Ausgabe im Prompt. Werte `<1` werden intern auf `1` angehoben. |
 | Chat History Size | `ch.so.agi.dbeaver.ai.historySize` | `12` | Anzahl letzter Messages, die zusaetzlich zur aktuellen User-Message in den LLM-Request aufgenommen werden. Werte `<0` werden auf `0` gesetzt. |
 | Max Context Tokens | `ch.so.agi.dbeaver.ai.maxContextTokens` | `4000` | Token-Budget fuer den Tabellenkontext (DDL + Samples). Bei Ueberschreitung wird Kontext gekuerzt. Werte `<100` werden auf `100` angehoben. |
+| Autocomplete Proposal Limit | `ch.so.agi.dbeaver.ai.mentionProposalLimit` | `40` | Max. Anzahl sichtbarer `#`-Autocomplete-Vorschlaege je Schritt. Die Statuszeile zeigt `angezeigt/gefunden` (z.B. `40/312 Treffer`). Werte `<1` werden auf `1` angehoben. |
 | Temperature (0.0 - 2.0) | `ch.so.agi.dbeaver.ai.temperature` | `0.0` | Sampling-Temperature fuer das Modell. Werte werden auf Bereich `[0.0, 2.0]` begrenzt. |
 
 Hinweis:
@@ -100,6 +101,10 @@ Hinweis:
 ## Hinweise
 
 - `#`-Autocomplete ist in der Chat-View implementiert (nicht im SQL-Editor).
+- `#`-Autocomplete arbeitet stufenweise:
+  - `#<datasource>` zeigt Datasources
+  - `#<datasource>.` zeigt Schemas dieser Datasource
+  - `#<datasource>.<schema>.` zeigt Tabellen dieses Schemas
 - Verlauf ist aktuell view-lokal (nicht über DBeaver-Neustart persistent).
 - Bei unauflösbaren Mentions wird eine Warnung ausgegeben, der Chat läuft weiter.
 - Falls Menueeintraege nach Plugin-Update fehlen: DBeaver mit `-clean` starten und Perspektive zuruecksetzen.

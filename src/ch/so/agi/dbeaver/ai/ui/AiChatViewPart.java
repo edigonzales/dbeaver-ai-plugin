@@ -209,9 +209,12 @@ public final class AiChatViewPart extends ViewPart {
 
             String prefix = mentionTriggerDetector.currentMentionPrefix(contents, position);
             List<MentionProposal> proposals = mentionProposalProvider.suggest(prefix);
+            int proposalLimit = settingsService.loadSettings().mentionProposalLimit();
+            int shown = Math.min(proposalLimit, proposals.size());
+            setStatus(shown + "/" + proposals.size() + " Treffer");
 
             return proposals.stream()
-                .limit(40)
+                .limit(proposalLimit)
                 .map(p -> new ContentProposal(p.insertText(), p.displayText(), null, p.insertText().length()))
                 .toArray(IContentProposal[]::new);
         };
@@ -221,7 +224,7 @@ public final class AiChatViewPart extends ViewPart {
             new TextContentAdapter(),
             provider,
             KeyStroke.getInstance(SWT.MOD1, SWT.SPACE),
-            new char[]{'#'}
+            new char[]{'#', '.'}
         );
         adapter.setProposalAcceptanceStyle(ContentProposalAdapter.PROPOSAL_INSERT);
         adapter.setPropagateKeys(true);

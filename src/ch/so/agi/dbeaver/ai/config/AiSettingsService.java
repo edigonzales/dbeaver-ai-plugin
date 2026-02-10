@@ -26,6 +26,7 @@ public final class AiSettingsService {
             store.getBoolean(AiPreferenceConstants.PREF_INCLUDE_SAMPLE_ROWS),
             store.getInt(AiPreferenceConstants.PREF_HISTORY_SIZE),
             store.getInt(AiPreferenceConstants.PREF_MAX_CONTEXT_TOKENS),
+            store.getInt(AiPreferenceConstants.PREF_MENTION_PROPOSAL_LIMIT),
             parseDoubleOrDefault(store.getString(AiPreferenceConstants.PREF_TEMPERATURE), 0.0)
         );
     }
@@ -45,6 +46,7 @@ public final class AiSettingsService {
 
         store.setValue(AiPreferenceConstants.PREF_HISTORY_SIZE, settings.historySize());
         store.setValue(AiPreferenceConstants.PREF_MAX_CONTEXT_TOKENS, settings.maxContextTokens());
+        store.setValue(AiPreferenceConstants.PREF_MENTION_PROPOSAL_LIMIT, settings.mentionProposalLimit());
         store.setValue(AiPreferenceConstants.PREF_TEMPERATURE, Double.toString(settings.temperature()));
 
         try {

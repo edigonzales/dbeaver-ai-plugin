@@ -11,6 +11,7 @@ public final class AiSettings {
     public static final String DEFAULT_SYSTEM_PROMPT = "Du bist ein Datenbank-Assistent und hilfst primär beim Entwerfen, Debuggen und Optimieren herausfordernder SQL-Abfragen. Antworte immer auf Deutsch. Wenn du eine SQL-Abfrage lieferst, MUSS sie in einem ```sql```-Codeblock stehen. Zu jeder SQL-Abfrage MUSS eine kurze Erklärung mitgeliefert werden (Zweck, zentrale Join-/Filter-/Aggregationslogik, Annahmen). Nutze bereitgestellten Tabellenkontext (DDL und Sample Rows) vorrangig und nenne fehlende Informationen explizit.";
     public static final boolean DEFAULT_INCLUDE_DDL = true;
     public static final boolean DEFAULT_INCLUDE_SAMPLE_ROWS = true;
+    public static final int DEFAULT_MENTION_PROPOSAL_LIMIT = 40;
 
     private final String baseUrl;
     private final String model;
@@ -22,6 +23,7 @@ public final class AiSettings {
     private final boolean includeSampleRows;
     private final int historySize;
     private final int maxContextTokens;
+    private final int mentionProposalLimit;
     private final double temperature;
 
     public AiSettings(
@@ -35,6 +37,7 @@ public final class AiSettings {
         boolean includeSampleRows,
         int historySize,
         int maxContextTokens,
+        int mentionProposalLimit,
         double temperature
     ) {
         this.baseUrl = normalizeOrDefault(baseUrl, DEFAULT_BASE_URL);
@@ -47,6 +50,7 @@ public final class AiSettings {
         this.includeSampleRows = includeSampleRows;
         this.historySize = Math.max(0, historySize);
         this.maxContextTokens = Math.max(100, maxContextTokens);
+        this.mentionProposalLimit = Math.max(1, mentionProposalLimit);
         this.temperature = clampTemperature(temperature);
     }
 
@@ -104,6 +108,10 @@ public final class AiSettings {
         return maxContextTokens;
     }
 
+    public int mentionProposalLimit() {
+        return mentionProposalLimit;
+    }
+
     public double temperature() {
         return temperature;
     }
@@ -136,6 +144,7 @@ public final class AiSettings {
             includeSampleRows,
             historySize,
             maxContextTokens,
+            mentionProposalLimit,
             value
         );
     }
@@ -153,6 +162,7 @@ public final class AiSettings {
             includeSampleRows,
             historySize,
             maxContextTokens,
+            mentionProposalLimit,
             temperature
         );
     }
@@ -172,6 +182,7 @@ public final class AiSettings {
             && includeSampleRows == other.includeSampleRows
             && historySize == other.historySize
             && maxContextTokens == other.maxContextTokens
+            && mentionProposalLimit == other.mentionProposalLimit
             && Double.compare(temperature, other.temperature) == 0
             && baseUrl.equals(other.baseUrl)
             && model.equals(other.model)

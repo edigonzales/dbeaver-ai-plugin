@@ -24,6 +24,7 @@ public final class AiPreferencePageMain extends PreferencePage implements IWorkb
     private Text maxColumnsPerSampleText;
     private Text historySizeText;
     private Text maxContextTokensText;
+    private Text mentionProposalLimitText;
     private Text temperatureText;
 
     private Button includeDdlButton;
@@ -87,6 +88,7 @@ public final class AiPreferencePageMain extends PreferencePage implements IWorkb
         maxColumnsPerSampleText = createLabeledText(root, "Max Columns per Sample", SWT.BORDER);
         historySizeText = createLabeledText(root, "Chat History Size", SWT.BORDER);
         maxContextTokensText = createLabeledText(root, "Max Context Tokens", SWT.BORDER);
+        mentionProposalLimitText = createLabeledText(root, "Autocomplete Proposal Limit", SWT.BORDER);
         temperatureText = createLabeledText(root, "Temperature (0.0 - 2.0)", SWT.BORDER);
 
         loadFromSettings(settingsService.loadSettings());
@@ -127,6 +129,7 @@ public final class AiPreferencePageMain extends PreferencePage implements IWorkb
             AiSettings.DEFAULT_INCLUDE_SAMPLE_ROWS,
             12,
             4_000,
+            AiSettings.DEFAULT_MENTION_PROPOSAL_LIMIT,
             0.0
         ));
         clearTokenButton.setSelection(false);
@@ -144,6 +147,7 @@ public final class AiPreferencePageMain extends PreferencePage implements IWorkb
         maxColumnsPerSampleText.setText(Integer.toString(settings.maxColumnsPerSample()));
         historySizeText.setText(Integer.toString(settings.historySize()));
         maxContextTokensText.setText(Integer.toString(settings.maxContextTokens()));
+        mentionProposalLimitText.setText(Integer.toString(settings.mentionProposalLimit()));
         temperatureText.setText(Double.toString(settings.temperature()));
 
         includeDdlButton.setSelection(settings.includeDdl());
@@ -162,6 +166,7 @@ public final class AiPreferencePageMain extends PreferencePage implements IWorkb
             includeSampleRowsButton.getSelection(),
             parseIntOrDefault(historySizeText.getText(), 12),
             parseIntOrDefault(maxContextTokensText.getText(), 4_000),
+            parseIntOrDefault(mentionProposalLimitText.getText(), AiSettings.DEFAULT_MENTION_PROPOSAL_LIMIT),
             parseDoubleOrDefault(temperatureText.getText(), 0.0)
         );
     }
