@@ -36,7 +36,10 @@ class ContextAssemblerTest {
         String prompt = assembler.toPromptBlock(bundle);
 
         assertThat(prompt).contains("Kontextquellen:");
+        assertThat(prompt).contains("Datenbanktypen:");
+        assertThat(prompt).contains("- db: PostgreSQL");
         assertThat(prompt).contains("### Tabelle: db.s.a (Mention: #db.s.a)");
+        assertThat(prompt).contains("Datenbanktyp: PostgreSQL");
         assertThat(prompt).contains("DDL:\n```sql");
         assertThat(prompt).contains("Sample Query:\n```sql");
         assertThat(prompt).contains("Sample Rows:");
@@ -62,6 +65,7 @@ class ContextAssemblerTest {
         return new TableContext(
             new TableReference("db", "s", canonical.substring(canonical.lastIndexOf('.') + 1), "#" + canonical),
             canonical,
+            "PostgreSQL",
             ddl,
             "SELECT * FROM " + canonical + " LIMIT 5;",
             List.of(new TableSampleRow(row))

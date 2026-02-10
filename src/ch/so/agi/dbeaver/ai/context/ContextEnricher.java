@@ -71,7 +71,14 @@ public final class ContextEnricher {
                 }
             }
 
-            tableContexts.add(new TableContext(table.reference(), table.fullyQualifiedName(), ddl, sampleSql, rows));
+            tableContexts.add(new TableContext(
+                table.reference(),
+                table.fullyQualifiedName(),
+                table.databaseType(),
+                ddl,
+                sampleSql,
+                rows
+            ));
             count++;
         }
 

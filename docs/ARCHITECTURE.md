@@ -89,6 +89,7 @@ System-Prompt und Limits in Preferences, API-Token im Secret Storage.
 
 1. Mention-Parsing identifiziert `#datasource.schema.table`-Referenzen aus der User-Nachricht.
 2. Kontextaufbau sammelt pro referenzierter Tabelle DDL, Sample-Query und Sample-Rows.
+   - zusätzlich wird der Datenbanktyp je Datasource ermittelt (Treibername, fallback Dialect).
 3. Budgeting kuerzt den Tabellenkontext bei Bedarf ueber `maxContextTokens`.
 4. `ContextAwarePromptComposer` baut den finalen User-Prompt in Abschnitten auf:
    - `## Nutzeranfrage`
@@ -97,6 +98,17 @@ System-Prompt und Limits in Preferences, API-Token im Secret Storage.
 5. Die aktuelle User-Nachricht wird genau einmal gesendet:
    - als `userPrompt` im aktuellen Request
    - nicht zusaetzlich in `history` desselben Requests
+
+## Logging-Pipeline
+
+- Logging ist ueber Preferences steuerbar:
+  - `LLM Logging = OFF | METADATA | FULL`
+  - `LangChain HTTP Logging (Request/Response) = true/false`
+- `METADATA` schreibt kompakte Start/Ende-Infos (Modell, Groessen, Dauer) ins DBeaver `Error Log`.
+- `FULL` schreibt zusaetzlich vollstaendige Prompt-/Antwort-Payloads (SYSTEM/HISTORY/USER/CONTEXT/ASSISTANT) ins DBeaver `Error Log`.
+- Lange Payloads werden in `part x/y`-Bloecke gesplittet.
+- Potenziell sensible Muster (`authorization`, `apiKey`, `token`) werden vor dem Volltext-Logging maskiert.
+- LangChain4j-HTTP-Logging (`logRequests`/`logResponses`) ist separat schaltbar und ergaenzt nur Framework-seitige Logs.
 
 ## Fehlerpfade
 

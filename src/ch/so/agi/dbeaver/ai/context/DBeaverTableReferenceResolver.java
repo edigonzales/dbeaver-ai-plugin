@@ -12,6 +12,7 @@ import org.jkiss.dbeaver.model.DBUtils;
 import org.jkiss.dbeaver.model.app.DBPDataSourceRegistry;
 import org.jkiss.dbeaver.model.app.DBPProject;
 import org.jkiss.dbeaver.model.app.DBPWorkspace;
+import org.jkiss.dbeaver.model.connection.DBPDriver;
 import org.jkiss.dbeaver.model.exec.DBCExecutionContext;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.runtime.VoidProgressMonitor;
@@ -45,7 +46,13 @@ public final class DBeaverTableReferenceResolver implements TableReferenceResolv
                     warnings.add("Unknown table reference: " + reference.canonicalId());
                     continue;
                 }
-                resolved.add(new ResolvedTable(reference, resolution.fqn, resolution.table, resolution.executionContext));
+                resolved.add(new ResolvedTable(
+                    reference,
+                    resolution.fqn,
+                    resolution.databaseType,
+                    resolution.table,
+                    resolution.executionContext
+                ));
             } catch (Exception e) {
                 warnings.add("Failed to resolve reference " + reference.canonicalId() + ": " + e.getMessage());
                 LOG.debug("Failed to resolve table reference", e);
@@ -77,7 +84,8 @@ public final class DBeaverTableReferenceResolver implements TableReferenceResolv
         }
 
         String fqn = DBUtils.getObjectFullName(dataSource, table, DBPEvaluationContext.DML);
-        return new Resolution(table, executionContext, fqn);
+        String databaseType = detectDatabaseType(container, dataSource);
+        return new Resolution(table, executionContext, fqn, databaseType);
     }
 
     private DBSEntity findEntity(DBPDataSource dataSource, String schemaName, String tableName, DBRProgressMonitor monitor) {
@@ -278,19 +286,78 @@ public final class DBeaverTableReferenceResolver implements TableReferenceResolv
         return container.getClass().getName() + "@" + System.identityHashCode(container);
     }
 
+    private String detectDatabaseType(DBPDataSourceContainer container, DBPDataSource dataSource) {
+        String driverName = "";
+        if (container != null) {
+            try {
+                DBPDriver driver = container.getDriver();
+                if (driver != null) {
+                    driverName = firstNonBlank(driver.getFullName(), driver.getName());
+                }
+            } catch (Exception ignored) {
+                // fallback below
+            }
+        }
+
+        String dialectName = "";
+        if (dataSource != null) {
+            try {
+                if (dataSource.getSQLDialect() != null) {
+                    dialectName = dataSource.getSQLDialect().getDialectName();
+                }
+            } catch (Exception ignored) {
+                // fallback below
+            }
+        }
+
+        String normalizedDriver = normalizeText(driverName);
+        String normalizedDialect = normalizeText(dialectName);
+
+        if (!normalizedDriver.isBlank() && !normalizedDialect.isBlank()
+            && !normalizedDriver.equalsIgnoreCase(normalizedDialect)) {
+            return normalizedDriver + " (Dialect: " + normalizedDialect + ")";
+        }
+        if (!normalizedDriver.isBlank()) {
+            return normalizedDriver;
+        }
+        if (!normalizedDialect.isBlank()) {
+            return normalizedDialect;
+        }
+        return "Unbekannt";
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return "";
+        }
+        for (String value : values) {
+            String normalized = normalizeText(value);
+            if (!normalized.isBlank()) {
+                return normalized;
+            }
+        }
+        return "";
+    }
+
+    private String normalizeText(String value) {
+        return value == null ? "" : value.trim();
+    }
+
     private static final class Resolution {
         private final DBSEntity table;
         private final DBCExecutionContext executionContext;
         private final String fqn;
+        private final String databaseType;
 
-        private Resolution(DBSEntity table, DBCExecutionContext executionContext, String fqn) {
+        private Resolution(DBSEntity table, DBCExecutionContext executionContext, String fqn, String databaseType) {
             this.table = table;
             this.executionContext = executionContext;
             this.fqn = fqn;
+            this.databaseType = databaseType == null || databaseType.isBlank() ? "Unbekannt" : databaseType;
         }
 
         private static Resolution unresolved() {
-            return new Resolution(null, null, "");
+            return new Resolution(null, null, "", "Unbekannt");
         }
     }
 }

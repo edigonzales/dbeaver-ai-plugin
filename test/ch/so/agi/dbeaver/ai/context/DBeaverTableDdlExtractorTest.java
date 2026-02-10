@@ -13,6 +13,7 @@ class DBeaverTableDdlExtractorTest {
         ResolvedTable resolved = new ResolvedTable(
             new TableReference("db", "s", "t", "#db.s.t"),
             "db.s.t",
+            "PostgreSQL",
             null,
             null
         );

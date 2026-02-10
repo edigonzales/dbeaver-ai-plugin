@@ -16,6 +16,7 @@ Ergebnis: **BUILD SUCCESSFUL**
 
 - `MentionParserTest`
   - `#db.schema.table` korrekt
+  - `#db.schema.table.` (trailing dot) korrekt
   - quoted Identifier inkl. escaped quotes
   - Dedup identischer Mentions
   - Tokenisierung trotz Satzzeichen
@@ -51,6 +52,10 @@ Ergebnis: **BUILD SUCCESSFUL**
 
 - `AiSettingsTest`
   - Defaulting/Clamping/Normalisierung
+- `LlmPayloadLoggerTest`
+  - Volltext-Formatierung (SYSTEM/HISTORY/USER/CONTEXT/ASSISTANT)
+  - Maskierung sensibler Werte (`authorization`, `apiKey`, `token`)
+  - Chunking in `part x/y`
 
 ## Manuelle Smoke-Tests (Eclipse Application)
 
@@ -87,7 +92,19 @@ Ergebnis: **BUILD SUCCESSFUL**
    - Längere Anfrage senden, dann `Stop`.
    - Erwartung: Stream stoppt, UI wird wieder freigegeben.
 
-8. Cache-/Perspektivenfall
+8. Logging-Modi
+   - Preferences setzen: `LLM Logging = OFF`, Anfrage senden.
+   - Erwartung: keine Start/Complete-Infozeilen fuer Request/Response im `Error Log`.
+   - Preferences setzen: `LLM Logging = METADATA`, Anfrage senden.
+   - Erwartung: kompakte Start/Complete-Metadaten im `Error Log`.
+   - Preferences setzen: `LLM Logging = FULL`, Anfrage senden.
+   - Erwartung: vollständiger Payload fuer Request/Response im `Error Log` (ggf. in mehreren `part x/y`-Bloecken), sensible Muster maskiert.
+
+9. LangChain HTTP Logging
+   - Checkbox `LangChain HTTP Logging (Request/Response)` aktivieren.
+   - Erwartung: zusaetzliche LangChain4j-HTTP-Logs je nach Runtime-Logger-Konfiguration; Plugin-eigene Logs bleiben unveraendert.
+
+10. Cache-/Perspektivenfall
    - Wenn View/Command fehlt: DBeaver mit `-clean` starten und Perspektive resetten.
    - Erwartung: `AI Chat` ist danach ueber `Show View` und `Find Actions` wieder auffindbar.
 

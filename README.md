@@ -8,6 +8,7 @@ DBeaver-Plugin für AI-gestützten Chat mit Tabellenkontext.
 - `#`-Autocomplete im Chat-Eingabefeld für Referenzen im Format `datasource.schema.table`
 - Mention-Parsing vor dem Senden
 - Kontextanreicherung je referenzierter Tabelle:
+  - Datenbanktyp (primär Treibername, fallback SQL-Dialect)
   - DDL (primär via DBeaver-DDL-Generator, sonst Fallback)
   - Sample-SQL (`SELECT * ... LIMIT n`)
   - Sample-Rows (limitiert, mit Maskierung sensibler Spalten)
@@ -80,10 +81,13 @@ Alle Settings (UI, Key, Default, Verhalten):
 | Max Context Tokens | `ch.so.agi.dbeaver.ai.maxContextTokens` | `4000` | Token-Budget fuer den Tabellenkontext (DDL + Samples). Bei Ueberschreitung wird Kontext gekuerzt. Werte `<100` werden auf `100` angehoben. |
 | Autocomplete Proposal Limit | `ch.so.agi.dbeaver.ai.mentionProposalLimit` | `40` | Max. Anzahl sichtbarer `#`-Autocomplete-Vorschlaege je Schritt. Die Statuszeile zeigt `angezeigt/gefunden` (z.B. `40/312 Treffer`). Werte `<1` werden auf `1` angehoben. |
 | Temperature (0.0 - 2.0) | `ch.so.agi.dbeaver.ai.temperature` | `0.0` | Sampling-Temperature fuer das Modell. Werte werden auf Bereich `[0.0, 2.0]` begrenzt. |
+| LLM Logging | `ch.so.agi.dbeaver.ai.llmLogMode` | `METADATA` | Logging-Modus fuer LLM-Kommunikation im DBeaver Error Log: `OFF` (kein Request/Response-Info-Logging), `METADATA` (nur kompakte Metadaten), `FULL` (vollstaendige Prompt-/Antwort-Texte). |
+| LangChain HTTP Logging (Request/Response) | `ch.so.agi.dbeaver.ai.langchainHttpLogging` | `false` | Schaltet das interne LangChain4j HTTP-Request/Response-Logging ein/aus (`logRequests`/`logResponses`). Sichtbarkeit zusaetzlicher Framework-Logs haengt vom Runtime-Logger ab. |
 
 Hinweis:
 
 - Request-Timeout ist derzeit fest auf `90s` implementiert und aktuell **kein** Preference-Setting.
+- Vollstaendige Payload-Logs (`LLM Logging = FULL`) erscheinen im DBeaver `Error Log`.
 
 ## Nutzung
 
@@ -105,6 +109,7 @@ Hinweis:
   - `#<datasource>` zeigt Datasources
   - `#<datasource>.` zeigt Schemas dieser Datasource
   - `#<datasource>.<schema>.` zeigt Tabellen dieses Schemas
+- Mentions mit abschließendem Punkt werden robust erkannt (z. B. `#db.schema.table.`).
 - Verlauf ist aktuell view-lokal (nicht über DBeaver-Neustart persistent).
 - Bei unauflösbaren Mentions wird eine Warnung ausgegeben, der Chat läuft weiter.
 - Falls Menueeintraege nach Plugin-Update fehlen: DBeaver mit `-clean` starten und Perspektive zuruecksetzen.

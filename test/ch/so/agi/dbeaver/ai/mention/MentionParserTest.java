@@ -48,6 +48,14 @@ class MentionParserTest {
     }
 
     @Test
+    void acceptsTrailingDotAfterMention() {
+        List<TableReference> refs = parser.parseReferences("Zaehle #edit-dev.agi_kartenkatalog_v2.kartenkatalog_ebene.");
+
+        assertThat(refs).hasSize(1);
+        assertThat(refs.get(0).canonicalId()).isEqualTo("edit-dev.agi_kartenkatalog_v2.kartenkatalog_ebene");
+    }
+
+    @Test
     void ignoresInvalidTokens() {
         List<TableReference> refs = parser.parseReferences("#db.schema #incomplete #too.many.parts.here");
 

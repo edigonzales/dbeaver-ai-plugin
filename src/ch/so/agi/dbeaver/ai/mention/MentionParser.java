@@ -77,7 +77,10 @@ public final class MentionParser {
             return null;
         }
 
-        String withoutHash = rawToken.substring(1);
+        String withoutHash = stripTrailingDots(rawToken.substring(1).trim());
+        if (withoutHash.isBlank()) {
+            return null;
+        }
         List<String> segments = splitToken(withoutHash);
         if (segments.size() != 3) {
             return null;
@@ -128,5 +131,13 @@ public final class MentionParser {
             return inner.replace("\"\"", "\"");
         }
         return trimmed;
+    }
+
+    private String stripTrailingDots(String value) {
+        int end = value.length();
+        while (end > 0 && value.charAt(end - 1) == '.') {
+            end--;
+        }
+        return value.substring(0, end);
     }
 }

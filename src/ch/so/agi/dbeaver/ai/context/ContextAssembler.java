@@ -5,6 +5,7 @@ import ch.so.agi.dbeaver.ai.model.TableContext;
 import ch.so.agi.dbeaver.ai.model.TableSampleRow;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -18,10 +19,12 @@ public final class ContextAssembler {
     public String toPromptBlock(ContextBundle bundle) {
         StringBuilder sb = new StringBuilder();
         sb.append("Kontextquellen:\n");
+        appendDatabaseTypes(sb, bundle.tableContexts());
 
         for (TableContext ctx : bundle.tableContexts()) {
             sb.append("\n### Tabelle: ").append(ctx.fullyQualifiedName());
             sb.append(" (Mention: ").append(ctx.reference().rawToken()).append(")\n");
+            sb.append("Datenbanktyp: ").append(ctx.databaseType()).append("\n");
             sb.append("DDL:\n");
             appendSqlCodeBlock(sb, ctx.ddl());
             sb.append("Sample Query:\n");
@@ -104,5 +107,21 @@ public final class ContextAssembler {
             sb.append('\n');
         }
         sb.append("```\n");
+    }
+
+    private void appendDatabaseTypes(StringBuilder sb, List<TableContext> contexts) {
+        if (contexts.isEmpty()) {
+            return;
+        }
+
+        Map<String, String> byDatasource = new LinkedHashMap<>();
+        for (TableContext ctx : contexts) {
+            byDatasource.putIfAbsent(ctx.reference().datasourceName(), ctx.databaseType());
+        }
+
+        sb.append("Datenbanktypen:\n");
+        for (Map.Entry<String, String> entry : byDatasource.entrySet()) {
+            sb.append("- ").append(entry.getKey()).append(": ").append(entry.getValue()).append('\n');
+        }
     }
 }

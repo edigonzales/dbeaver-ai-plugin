@@ -4,6 +4,7 @@ import org.eclipse.swt.SWT;
 import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.layout.GridLayout;
 import org.eclipse.swt.widgets.Button;
+import org.eclipse.swt.widgets.Combo;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Label;
@@ -26,9 +27,11 @@ public final class AiPreferencePageMain extends PreferencePage implements IWorkb
     private Text maxContextTokensText;
     private Text mentionProposalLimitText;
     private Text temperatureText;
+    private Combo llmLogModeCombo;
 
     private Button includeDdlButton;
     private Button includeSampleRowsButton;
+    private Button langchainHttpLoggingButton;
     private Button clearTokenButton;
     private Label tokenStatusLabel;
 
@@ -90,6 +93,20 @@ public final class AiPreferencePageMain extends PreferencePage implements IWorkb
         maxContextTokensText = createLabeledText(root, "Max Context Tokens", SWT.BORDER);
         mentionProposalLimitText = createLabeledText(root, "Autocomplete Proposal Limit", SWT.BORDER);
         temperatureText = createLabeledText(root, "Temperature (0.0 - 2.0)", SWT.BORDER);
+        llmLogModeCombo = createLabeledCombo(root, "LLM Logging", new String[]{"OFF", "METADATA", "FULL"});
+
+        langchainHttpLoggingButton = new Button(root, SWT.CHECK);
+        langchainHttpLoggingButton.setText("LangChain HTTP Logging (Request/Response)");
+        GridData langchainLoggingGd = new GridData(SWT.FILL, SWT.CENTER, true, false);
+        langchainLoggingGd.horizontalSpan = 2;
+        langchainHttpLoggingButton.setLayoutData(langchainLoggingGd);
+
+        Label loggingHintLabel = new Label(root, SWT.WRAP);
+        loggingHintLabel.setText("Hinweis: LLM Logging = FULL schreibt vollständige Prompt- und Antworttexte ins Error Log.");
+        GridData loggingHintGd = new GridData(SWT.FILL, SWT.CENTER, true, false);
+        loggingHintGd.horizontalSpan = 2;
+        loggingHintGd.widthHint = 700;
+        loggingHintLabel.setLayoutData(loggingHintGd);
 
         loadFromSettings(settingsService.loadSettings());
         updateTokenStatus();
@@ -130,6 +147,8 @@ public final class AiPreferencePageMain extends PreferencePage implements IWorkb
             12,
             4_000,
             AiSettings.DEFAULT_MENTION_PROPOSAL_LIMIT,
+            AiSettings.DEFAULT_LLM_LOG_MODE,
+            AiSettings.DEFAULT_LANGCHAIN_HTTP_LOGGING,
             0.0
         ));
         clearTokenButton.setSelection(false);
@@ -149,9 +168,11 @@ public final class AiPreferencePageMain extends PreferencePage implements IWorkb
         maxContextTokensText.setText(Integer.toString(settings.maxContextTokens()));
         mentionProposalLimitText.setText(Integer.toString(settings.mentionProposalLimit()));
         temperatureText.setText(Double.toString(settings.temperature()));
+        llmLogModeCombo.setText(settings.llmLogMode().name());
 
         includeDdlButton.setSelection(settings.includeDdl());
         includeSampleRowsButton.setSelection(settings.includeSampleRows());
+        langchainHttpLoggingButton.setSelection(settings.langchainHttpLogging());
     }
 
     private AiSettings readFromForm() {
@@ -167,6 +188,8 @@ public final class AiPreferencePageMain extends PreferencePage implements IWorkb
             parseIntOrDefault(historySizeText.getText(), 12),
             parseIntOrDefault(maxContextTokensText.getText(), 4_000),
             parseIntOrDefault(mentionProposalLimitText.getText(), AiSettings.DEFAULT_MENTION_PROPOSAL_LIMIT),
+            parseLlmLogMode(llmLogModeCombo.getText()),
+            langchainHttpLoggingButton.getSelection(),
             parseDoubleOrDefault(temperatureText.getText(), 0.0)
         );
     }
@@ -185,6 +208,19 @@ public final class AiPreferencePageMain extends PreferencePage implements IWorkb
         Text t = new Text(parent, style);
         t.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, true, false));
         return t;
+    }
+
+    private Combo createLabeledCombo(Composite parent, String label, String[] values) {
+        Label l = new Label(parent, SWT.NONE);
+        l.setText(label);
+
+        Combo combo = new Combo(parent, SWT.DROP_DOWN | SWT.READ_ONLY);
+        combo.setItems(values);
+        combo.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, true, false));
+        if (values.length > 0) {
+            combo.select(0);
+        }
+        return combo;
     }
 
     private int parseIntOrDefault(String text, int fallback) {
@@ -208,5 +244,9 @@ public final class AiPreferencePageMain extends PreferencePage implements IWorkb
             return fallback;
         }
         return text.trim();
+    }
+
+    private LlmLogMode parseLlmLogMode(String value) {
+        return LlmLogMode.fromPreferenceValue(value);
     }
 }

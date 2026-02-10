@@ -31,7 +31,7 @@ class ContextEnricherTest {
     @Test
     void buildsContextAndMasksSensitiveValues() {
         TableReference ref = new TableReference("db", "s", "users", "#db.s.users");
-        ResolvedTable resolved = new ResolvedTable(ref, "db.s.users", new Object(), new Object());
+        ResolvedTable resolved = new ResolvedTable(ref, "db.s.users", "PostgreSQL", new Object(), new Object());
 
         ContextEnricher enricher = new ContextEnricher(
             refs -> new ResolvedTableResult(List.of(resolved), List.of()),
@@ -44,6 +44,7 @@ class ContextEnricherTest {
 
         assertThat(bundle.tableContexts()).hasSize(1);
         assertThat(bundle.tableContexts().get(0).ddl()).contains("CREATE TABLE users");
+        assertThat(bundle.tableContexts().get(0).databaseType()).isEqualTo("PostgreSQL");
         assertThat(bundle.tableContexts().get(0).sampleRows()).hasSize(1);
         assertThat(bundle.tableContexts().get(0).sampleRows().get(0).values()).containsEntry("password", "***");
     }

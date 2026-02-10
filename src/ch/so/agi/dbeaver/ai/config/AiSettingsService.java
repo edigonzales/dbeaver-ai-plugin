@@ -27,6 +27,8 @@ public final class AiSettingsService {
             store.getInt(AiPreferenceConstants.PREF_HISTORY_SIZE),
             store.getInt(AiPreferenceConstants.PREF_MAX_CONTEXT_TOKENS),
             store.getInt(AiPreferenceConstants.PREF_MENTION_PROPOSAL_LIMIT),
+            parseLlmLogMode(store.getString(AiPreferenceConstants.PREF_LLM_LOG_MODE)),
+            store.getBoolean(AiPreferenceConstants.PREF_LANGCHAIN_HTTP_LOGGING),
             parseDoubleOrDefault(store.getString(AiPreferenceConstants.PREF_TEMPERATURE), 0.0)
         );
     }
@@ -47,6 +49,8 @@ public final class AiSettingsService {
         store.setValue(AiPreferenceConstants.PREF_HISTORY_SIZE, settings.historySize());
         store.setValue(AiPreferenceConstants.PREF_MAX_CONTEXT_TOKENS, settings.maxContextTokens());
         store.setValue(AiPreferenceConstants.PREF_MENTION_PROPOSAL_LIMIT, settings.mentionProposalLimit());
+        store.setValue(AiPreferenceConstants.PREF_LLM_LOG_MODE, settings.llmLogMode().name());
+        store.setValue(AiPreferenceConstants.PREF_LANGCHAIN_HTTP_LOGGING, settings.langchainHttpLogging());
         store.setValue(AiPreferenceConstants.PREF_TEMPERATURE, Double.toString(settings.temperature()));
 
         try {
@@ -112,5 +116,9 @@ public final class AiSettingsService {
         } catch (NumberFormatException ex) {
             return fallback;
         }
+    }
+
+    private LlmLogMode parseLlmLogMode(String value) {
+        return LlmLogMode.fromPreferenceValue(value);
     }
 }

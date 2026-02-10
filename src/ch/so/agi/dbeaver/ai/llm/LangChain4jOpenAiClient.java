@@ -1,5 +1,6 @@
 package ch.so.agi.dbeaver.ai.llm;
 
+import ch.so.agi.dbeaver.ai.config.LlmLogMode;
 import ch.so.agi.dbeaver.ai.model.ChatMessage;
 import ch.so.agi.dbeaver.ai.model.ChatRole;
 import dev.langchain4j.data.message.AiMessage;
@@ -28,19 +29,26 @@ public final class LangChain4jOpenAiClient implements LlmClient {
     private final String modelName;
     private final double temperature;
     private final Duration timeout;
+    private final LlmLogMode llmLogMode;
+    private final boolean langchainHttpLogging;
+    private final LlmPayloadLogger payloadLogger = new LlmPayloadLogger();
 
     public LangChain4jOpenAiClient(
         String baseUrl,
         String apiKey,
         String modelName,
         double temperature,
-        Duration timeout
+        Duration timeout,
+        LlmLogMode llmLogMode,
+        boolean langchainHttpLogging
     ) {
         this.baseUrl = Objects.requireNonNull(baseUrl, "baseUrl");
         this.apiKey = Objects.requireNonNull(apiKey, "apiKey");
         this.modelName = Objects.requireNonNull(modelName, "modelName");
         this.temperature = temperature;
         this.timeout = Objects.requireNonNull(timeout, "timeout");
+        this.llmLogMode = llmLogMode == null ? LlmLogMode.METADATA : llmLogMode;
+        this.langchainHttpLogging = langchainHttpLogging;
     }
 
     @Override
@@ -54,8 +62,8 @@ public final class LangChain4jOpenAiClient implements LlmClient {
             .modelName(modelName)
             .temperature(temperature)
             .timeout(timeout)
-            .logRequests(true)
-            .logResponses(true)
+            .logRequests(langchainHttpLogging)
+            .logResponses(langchainHttpLogging)
             .build();
 
         List<dev.langchain4j.data.message.ChatMessage> messages = new ArrayList<>();
@@ -75,14 +83,22 @@ public final class LangChain4jOpenAiClient implements LlmClient {
             .messages(messages)
             .build();
 
-        LOG.info(
-            "LLM request started (provider=langchain4j-openai, model=" + modelName
-                + ", baseUrl=" + baseUrl
-                + ", historyMessages=" + request.history().size()
-                + ", userPromptChars=" + request.userPrompt().length()
-                + ", contextChars=" + request.contextBlock().length()
-                + ")"
-        );
+        long startedAtNanos = System.nanoTime();
+
+        if (llmLogMode != LlmLogMode.OFF) {
+            LOG.info(
+                "LLM request started (provider=langchain4j-openai, model=" + modelName
+                    + ", baseUrl=" + baseUrl
+                    + ", historyMessages=" + request.history().size()
+                    + ", userPromptChars=" + request.userPrompt().length()
+                    + ", contextChars=" + request.contextBlock().length()
+                    + ", langchainHttpLogging=" + langchainHttpLogging
+                    + ")"
+            );
+        }
+        if (llmLogMode == LlmLogMode.FULL) {
+            logParts("LLM request payload", payloadLogger.formatRequestParts(request));
+        }
 
         AtomicBoolean cancelled = new AtomicBoolean(false);
         AtomicReference<dev.langchain4j.model.chat.response.StreamingHandle> modelHandleRef = new AtomicReference<>();
@@ -112,7 +128,13 @@ public final class LangChain4jOpenAiClient implements LlmClient {
                 if (text == null || text.isEmpty()) {
                     text = partialText.toString();
                 }
-                LOG.info("LLM response completed (chars=" + text.length() + ")");
+                long durationMs = (System.nanoTime() - startedAtNanos) / 1_000_000L;
+                if (llmLogMode != LlmLogMode.OFF) {
+                    LOG.info("LLM response completed (chars=" + text.length() + ", durationMs=" + durationMs + ")");
+                }
+                if (llmLogMode == LlmLogMode.FULL) {
+                    logParts("LLM response payload", payloadLogger.formatResponseParts(text));
+                }
                 listener.onComplete(text);
             }
 
@@ -121,7 +143,8 @@ public final class LangChain4jOpenAiClient implements LlmClient {
                 if (cancelled.get()) {
                     return;
                 }
-                LOG.error("LLM request failed", error);
+                long durationMs = (System.nanoTime() - startedAtNanos) / 1_000_000L;
+                LOG.error("LLM request failed (durationMs=" + durationMs + ")", error);
                 listener.onError(error);
             }
         });
@@ -133,5 +156,11 @@ public final class LangChain4jOpenAiClient implements LlmClient {
                 handle.cancel();
             }
         };
+    }
+
+    private void logParts(String prefix, List<String> parts) {
+        for (int i = 0; i < parts.size(); i++) {
+            LOG.info(prefix + " [part " + (i + 1) + "/" + parts.size() + "]\n" + parts.get(i));
+        }
     }
 }

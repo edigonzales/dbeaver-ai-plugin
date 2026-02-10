@@ -160,7 +160,9 @@ public final class AiChatViewPart extends ViewPart {
             apiToken,
             settings.model(),
             settings.temperature(),
-            settings.timeout()
+            settings.timeout(),
+            settings.llmLogMode(),
+            settings.langchainHttpLogging()
         );
 
         ChatController controller = new ChatController(
@@ -273,7 +275,7 @@ public final class AiChatViewPart extends ViewPart {
                 stopButton.setEnabled(true);
             });
             appendLine("You> " + userPrompt);
-            appendText("AI> ");
+            appendLine("AI> ");
             setStatus("Anfrage wird verarbeitet...");
         }
 

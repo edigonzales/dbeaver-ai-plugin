@@ -39,7 +39,7 @@ class ChatControllerTest {
         TableReferenceResolver resolver = refs -> {
             List<ResolvedTable> resolved = new ArrayList<>();
             for (TableReference ref : refs) {
-                resolved.add(new ResolvedTable(ref, ref.canonicalId(), new Object(), new Object()));
+                resolved.add(new ResolvedTable(ref, ref.canonicalId(), "PostgreSQL", new Object(), new Object()));
             }
             return new ResolvedTableResult(resolved, List.of());
         };
@@ -84,6 +84,8 @@ class ChatControllerTest {
         assertThat(ui.beforeSendText).isEqualTo("Analyse #db.s.users");
         assertThat(ui.partialChunks).contains("Hello");
         assertThat(ui.completedText).isEqualTo("Hello world");
+        assertThat(ui.promptBlock).contains("Datenbanktypen:");
+        assertThat(ui.promptBlock).contains("Datenbanktyp: PostgreSQL");
         assertThat(ui.promptBlock).contains("### Tabelle: db.s.users (Mention: #db.s.users)");
 
         assertThat(session.snapshot()).hasSize(2);
