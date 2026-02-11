@@ -60,6 +60,12 @@ Kurz:
 3. Bei Lib-Aenderungen `./gradlew syncBundleLibs` ausfuehren und danach `PDE Tools -> Update Classpath`.
 4. Als `Eclipse Application` mit `org.jkiss.dbeaver.ui.app.standalone.standalone` starten.
 
+## Release / Update Site
+
+Die Veroeffentlichung auf der gemeinsamen Update-Site (`ili2pg` + `AI`) ist hier beschrieben:
+
+- [Releasing / Update Site](docs/RELEASING_UPDATE_SITE.md)
+
 ## DBeaver Preferences
 
 Preference Page ID: `ch.so.agi.dbeaver.ai.preferences.main`
