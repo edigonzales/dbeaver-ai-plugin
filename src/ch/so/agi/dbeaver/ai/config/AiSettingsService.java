@@ -16,21 +16,42 @@ public final class AiSettingsService {
     public AiSettings loadSettings() {
         DBPPreferenceStore store = preferenceStore();
         return new AiSettings(
-            store.getString(AiPreferenceConstants.PREF_BASE_URL),
-            store.getString(AiPreferenceConstants.PREF_MODEL),
-            store.getString(AiPreferenceConstants.PREF_SYSTEM_PROMPT),
-            store.getInt(AiPreferenceConstants.PREF_SAMPLE_ROW_LIMIT),
-            store.getInt(AiPreferenceConstants.PREF_MAX_REFERENCED_TABLES),
-            store.getInt(AiPreferenceConstants.PREF_MAX_COLUMNS_PER_SAMPLE),
-            store.getBoolean(AiPreferenceConstants.PREF_INCLUDE_DDL),
-            store.getBoolean(AiPreferenceConstants.PREF_INCLUDE_SAMPLE_ROWS),
-            store.getInt(AiPreferenceConstants.PREF_HISTORY_SIZE),
-            store.getInt(AiPreferenceConstants.PREF_MAX_CONTEXT_TOKENS),
-            store.getInt(AiPreferenceConstants.PREF_MENTION_PROPOSAL_LIMIT),
-            parseLlmLogMode(store.getString(AiPreferenceConstants.PREF_LLM_LOG_MODE)),
-            store.getBoolean(AiPreferenceConstants.PREF_LANGCHAIN_HTTP_LOGGING),
+            getPreferenceString(store, AiPreferenceConstants.PREF_BASE_URL, AiSettings.DEFAULT_BASE_URL),
+            getPreferenceString(store, AiPreferenceConstants.PREF_MODEL, AiSettings.DEFAULT_MODEL),
+            getPreferenceString(store, AiPreferenceConstants.PREF_SYSTEM_PROMPT, AiSettings.DEFAULT_SYSTEM_PROMPT),
+            getPreferenceInt(store, AiPreferenceConstants.PREF_SAMPLE_ROW_LIMIT, 5),
+            getPreferenceInt(store, AiPreferenceConstants.PREF_MAX_REFERENCED_TABLES, 8),
+            getPreferenceInt(store, AiPreferenceConstants.PREF_MAX_COLUMNS_PER_SAMPLE, 30),
+            getPreferenceBoolean(store, AiPreferenceConstants.PREF_INCLUDE_DDL, AiSettings.DEFAULT_INCLUDE_DDL),
+            getPreferenceBoolean(store, AiPreferenceConstants.PREF_INCLUDE_SAMPLE_ROWS, AiSettings.DEFAULT_INCLUDE_SAMPLE_ROWS),
+            getPreferenceInt(store, AiPreferenceConstants.PREF_HISTORY_SIZE, 12),
+            getPreferenceInt(store, AiPreferenceConstants.PREF_MAX_CONTEXT_TOKENS, 4_000),
+            getPreferenceInt(store, AiPreferenceConstants.PREF_MENTION_PROPOSAL_LIMIT, AiSettings.DEFAULT_MENTION_PROPOSAL_LIMIT),
+            parseLlmLogMode(getPreferenceString(store, AiPreferenceConstants.PREF_LLM_LOG_MODE, AiSettings.DEFAULT_LLM_LOG_MODE.name())),
+            getPreferenceBoolean(store, AiPreferenceConstants.PREF_LANGCHAIN_HTTP_LOGGING, AiSettings.DEFAULT_LANGCHAIN_HTTP_LOGGING),
             parseDoubleOrDefault(store.getString(AiPreferenceConstants.PREF_TEMPERATURE), 0.0)
         );
+    }
+
+    private String getPreferenceString(DBPPreferenceStore store, String key, String defaultValue) {
+        String value = store.getString(key);
+        return (value == null || value.isBlank()) ? defaultValue : value.trim();
+    }
+
+    private int getPreferenceInt(DBPPreferenceStore store, String key, int defaultValue) {
+        // First try to get the value; if not set (returns 0), fall back to default
+        int value = store.getInt(key);
+        return (value == 0) ? defaultValue : value;
+    }
+
+    private boolean getPreferenceBoolean(DBPPreferenceStore store, String key, boolean defaultValue) {
+        // Use store.getBoolean() which returns false for unset values
+        // We need to check if the value was explicitly set
+        String stringValue = store.getString(key);
+        if (stringValue == null) {
+            return defaultValue;
+        }
+        return Boolean.parseBoolean(stringValue.trim());
     }
 
     public void saveSettings(AiSettings settings) {
