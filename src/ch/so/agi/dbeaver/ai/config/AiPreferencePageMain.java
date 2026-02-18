@@ -26,6 +26,7 @@ public final class AiPreferencePageMain extends PreferencePage implements IWorkb
     private Text historySizeText;
     private Text maxContextTokensText;
     private Text mentionProposalLimitText;
+    private Text mentionCandidateLimitText;
     private Text temperatureText;
     private Combo llmLogModeCombo;
 
@@ -92,6 +93,7 @@ public final class AiPreferencePageMain extends PreferencePage implements IWorkb
         historySizeText = createLabeledText(root, "Chat History Size", SWT.BORDER);
         maxContextTokensText = createLabeledText(root, "Max Context Tokens", SWT.BORDER);
         mentionProposalLimitText = createLabeledText(root, "Autocomplete Proposal Limit", SWT.BORDER);
+        mentionCandidateLimitText = createLabeledText(root, "Autocomplete Candidate Scan Limit", SWT.BORDER);
         temperatureText = createLabeledText(root, "Temperature (0.0 - 2.0)", SWT.BORDER);
         llmLogModeCombo = createLabeledCombo(root, "LLM Logging", new String[]{"OFF", "METADATA", "FULL"});
 
@@ -147,6 +149,7 @@ public final class AiPreferencePageMain extends PreferencePage implements IWorkb
             12,
             4_000,
             AiSettings.DEFAULT_MENTION_PROPOSAL_LIMIT,
+            AiSettings.DEFAULT_MENTION_CANDIDATE_LIMIT,
             AiSettings.DEFAULT_LLM_LOG_MODE,
             AiSettings.DEFAULT_LANGCHAIN_HTTP_LOGGING,
             0.0
@@ -167,6 +170,7 @@ public final class AiPreferencePageMain extends PreferencePage implements IWorkb
         historySizeText.setText(Integer.toString(settings.historySize()));
         maxContextTokensText.setText(Integer.toString(settings.maxContextTokens()));
         mentionProposalLimitText.setText(Integer.toString(settings.mentionProposalLimit()));
+        mentionCandidateLimitText.setText(Integer.toString(settings.mentionCandidateLimit()));
         temperatureText.setText(Double.toString(settings.temperature()));
         llmLogModeCombo.setText(settings.llmLogMode().name());
 
@@ -188,6 +192,7 @@ public final class AiPreferencePageMain extends PreferencePage implements IWorkb
             parseIntOrDefault(historySizeText.getText(), 12),
             parseIntOrDefault(maxContextTokensText.getText(), 4_000),
             parseIntOrDefault(mentionProposalLimitText.getText(), AiSettings.DEFAULT_MENTION_PROPOSAL_LIMIT),
+            parseIntOrDefault(mentionCandidateLimitText.getText(), AiSettings.DEFAULT_MENTION_CANDIDATE_LIMIT),
             parseLlmLogMode(llmLogModeCombo.getText()),
             langchainHttpLoggingButton.getSelection(),
             parseDoubleOrDefault(temperatureText.getText(), 0.0)

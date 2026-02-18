@@ -19,6 +19,7 @@ class AiSettingsTest {
             -1,
             10,
             -5,
+            -7,
             null,
             true,
             9.0
@@ -33,6 +34,7 @@ class AiSettingsTest {
         assertThat(settings.historySize()).isEqualTo(0);
         assertThat(settings.maxContextTokens()).isEqualTo(100);
         assertThat(settings.mentionProposalLimit()).isEqualTo(1);
+        assertThat(settings.mentionCandidateLimit()).isEqualTo(1);
         assertThat(settings.llmLogMode()).isEqualTo(LlmLogMode.METADATA);
         assertThat(settings.langchainHttpLogging()).isTrue();
         assertThat(settings.temperature()).isEqualTo(2.0);

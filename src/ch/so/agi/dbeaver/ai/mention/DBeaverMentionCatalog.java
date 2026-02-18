@@ -27,7 +27,7 @@ import java.util.Set;
 public final class DBeaverMentionCatalog {
     private static final Log LOG = Log.getLog(DBeaverMentionCatalog.class);
     private static final int MAX_TRAVERSAL_DEPTH = 4;
-    private static final int DEFAULT_MAX_CANDIDATES = 500;
+    private static final int DEFAULT_MAX_CANDIDATES = 100_000;
 
     public List<TableReference> loadCandidates() {
         return loadCandidates(DEFAULT_MAX_CANDIDATES);
@@ -108,12 +108,12 @@ public final class DBeaverMentionCatalog {
         DBRProgressMonitor monitor,
         int maxCandidates
     ) {
-        Deque<NodeWithDepth> stack = new ArrayDeque<>();
+        Deque<NodeWithDepth> queue = new ArrayDeque<>();
         Set<String> visited = new HashSet<>();
-        stack.push(new NodeWithDepth(root, 0));
+        queue.addLast(new NodeWithDepth(root, 0));
 
-        while (!stack.isEmpty() && dedup.size() < maxCandidates) {
-            NodeWithDepth entry = stack.pop();
+        while (!queue.isEmpty() && dedup.size() < maxCandidates) {
+            NodeWithDepth entry = queue.removeFirst();
             DBSObjectContainer container = entry.container;
 
             if (entry.depth > MAX_TRAVERSAL_DEPTH) {
@@ -139,7 +139,7 @@ public final class DBeaverMentionCatalog {
                     }
 
                     if (child instanceof DBSObjectContainer nested) {
-                        stack.push(new NodeWithDepth(nested, entry.depth + 1));
+                        queue.addLast(new NodeWithDepth(nested, entry.depth + 1));
                     }
                 }
             } catch (Exception ex) {

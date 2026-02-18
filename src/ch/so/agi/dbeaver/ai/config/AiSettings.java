@@ -12,6 +12,7 @@ public final class AiSettings {
     public static final boolean DEFAULT_INCLUDE_DDL = true;
     public static final boolean DEFAULT_INCLUDE_SAMPLE_ROWS = true;
     public static final int DEFAULT_MENTION_PROPOSAL_LIMIT = 40;
+    public static final int DEFAULT_MENTION_CANDIDATE_LIMIT = 100_000;
     public static final LlmLogMode DEFAULT_LLM_LOG_MODE = LlmLogMode.METADATA;
     public static final boolean DEFAULT_LANGCHAIN_HTTP_LOGGING = false;
 
@@ -26,6 +27,7 @@ public final class AiSettings {
     private final int historySize;
     private final int maxContextTokens;
     private final int mentionProposalLimit;
+    private final int mentionCandidateLimit;
     private final LlmLogMode llmLogMode;
     private final boolean langchainHttpLogging;
     private final double temperature;
@@ -42,6 +44,7 @@ public final class AiSettings {
         int historySize,
         int maxContextTokens,
         int mentionProposalLimit,
+        int mentionCandidateLimit,
         LlmLogMode llmLogMode,
         boolean langchainHttpLogging,
         double temperature
@@ -57,6 +60,7 @@ public final class AiSettings {
         this.historySize = Math.max(0, historySize);
         this.maxContextTokens = Math.max(100, maxContextTokens);
         this.mentionProposalLimit = Math.max(1, mentionProposalLimit);
+        this.mentionCandidateLimit = Math.max(1, mentionCandidateLimit);
         this.llmLogMode = llmLogMode == null ? DEFAULT_LLM_LOG_MODE : llmLogMode;
         this.langchainHttpLogging = langchainHttpLogging;
         this.temperature = clampTemperature(temperature);
@@ -120,6 +124,10 @@ public final class AiSettings {
         return mentionProposalLimit;
     }
 
+    public int mentionCandidateLimit() {
+        return mentionCandidateLimit;
+    }
+
     public LlmLogMode llmLogMode() {
         return llmLogMode;
     }
@@ -161,6 +169,7 @@ public final class AiSettings {
             historySize,
             maxContextTokens,
             mentionProposalLimit,
+            mentionCandidateLimit,
             llmLogMode,
             langchainHttpLogging,
             value
@@ -181,6 +190,7 @@ public final class AiSettings {
             historySize,
             maxContextTokens,
             mentionProposalLimit,
+            mentionCandidateLimit,
             llmLogMode,
             langchainHttpLogging,
             temperature
@@ -203,6 +213,7 @@ public final class AiSettings {
             && historySize == other.historySize
             && maxContextTokens == other.maxContextTokens
             && mentionProposalLimit == other.mentionProposalLimit
+            && mentionCandidateLimit == other.mentionCandidateLimit
             && llmLogMode == other.llmLogMode
             && langchainHttpLogging == other.langchainHttpLogging
             && Double.compare(temperature, other.temperature) == 0

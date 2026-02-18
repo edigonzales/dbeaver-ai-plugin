@@ -27,6 +27,7 @@ public final class AiSettingsService {
             getPreferenceInt(store, AiPreferenceConstants.PREF_HISTORY_SIZE, 12),
             getPreferenceInt(store, AiPreferenceConstants.PREF_MAX_CONTEXT_TOKENS, 4_000),
             getPreferenceInt(store, AiPreferenceConstants.PREF_MENTION_PROPOSAL_LIMIT, AiSettings.DEFAULT_MENTION_PROPOSAL_LIMIT),
+            getPreferenceInt(store, AiPreferenceConstants.PREF_MENTION_CANDIDATE_LIMIT, AiSettings.DEFAULT_MENTION_CANDIDATE_LIMIT),
             parseLlmLogMode(getPreferenceString(store, AiPreferenceConstants.PREF_LLM_LOG_MODE, AiSettings.DEFAULT_LLM_LOG_MODE.name())),
             getPreferenceBoolean(store, AiPreferenceConstants.PREF_LANGCHAIN_HTTP_LOGGING, AiSettings.DEFAULT_LANGCHAIN_HTTP_LOGGING),
             parseDoubleOrDefault(store.getString(AiPreferenceConstants.PREF_TEMPERATURE), 0.0)
@@ -70,6 +71,7 @@ public final class AiSettingsService {
         store.setValue(AiPreferenceConstants.PREF_HISTORY_SIZE, settings.historySize());
         store.setValue(AiPreferenceConstants.PREF_MAX_CONTEXT_TOKENS, settings.maxContextTokens());
         store.setValue(AiPreferenceConstants.PREF_MENTION_PROPOSAL_LIMIT, settings.mentionProposalLimit());
+        store.setValue(AiPreferenceConstants.PREF_MENTION_CANDIDATE_LIMIT, settings.mentionCandidateLimit());
         store.setValue(AiPreferenceConstants.PREF_LLM_LOG_MODE, settings.llmLogMode().name());
         store.setValue(AiPreferenceConstants.PREF_LANGCHAIN_HTTP_LOGGING, settings.langchainHttpLogging());
         store.setValue(AiPreferenceConstants.PREF_TEMPERATURE, Double.toString(settings.temperature()));

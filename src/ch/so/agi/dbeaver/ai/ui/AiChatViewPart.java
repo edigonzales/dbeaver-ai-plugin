@@ -3,6 +3,7 @@ package ch.so.agi.dbeaver.ai.ui;
 import ch.so.agi.dbeaver.ai.chat.ChatController;
 import ch.so.agi.dbeaver.ai.chat.ChatSession;
 import ch.so.agi.dbeaver.ai.chat.ChatUiListener;
+import ch.so.agi.dbeaver.ai.config.AiPreferenceConstants;
 import ch.so.agi.dbeaver.ai.config.AiSettings;
 import ch.so.agi.dbeaver.ai.config.AiSettingsService;
 import ch.so.agi.dbeaver.ai.context.ContextAssembler;
@@ -22,6 +23,15 @@ import ch.so.agi.dbeaver.ai.mention.MentionProposalProvider;
 import ch.so.agi.dbeaver.ai.mention.MentionTriggerDetector;
 import ch.so.agi.dbeaver.ai.model.ContextBundle;
 import ch.so.agi.dbeaver.ai.model.TableReference;
+import org.jkiss.dbeaver.Log;
+import org.jkiss.dbeaver.model.DBPEvent;
+import org.jkiss.dbeaver.model.DBPEventListener;
+import org.jkiss.dbeaver.model.app.DBPDataSourceRegistry;
+import org.jkiss.dbeaver.model.app.DBPProject;
+import org.jkiss.dbeaver.model.app.DBPWorkspace;
+import org.jkiss.dbeaver.model.preferences.DBPPreferenceListener;
+import org.jkiss.dbeaver.model.preferences.DBPPreferenceStore;
+import org.jkiss.dbeaver.runtime.DBWorkbench;
 import org.eclipse.jface.bindings.keys.KeyStroke;
 import org.eclipse.jface.fieldassist.ContentProposal;
 import org.eclipse.jface.fieldassist.ContentProposalAdapter;
@@ -38,9 +48,12 @@ import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Text;
 import org.eclipse.ui.part.ViewPart;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public final class AiChatViewPart extends ViewPart {
+    private static final Log LOG = Log.getLog(AiChatViewPart.class);
     public static final String VIEW_ID = "ch.so.agi.dbeaver.ai.views.chat";
 
     private final AiSettingsService settingsService = new AiSettingsService();
@@ -65,6 +78,30 @@ public final class AiChatViewPart extends ViewPart {
     private Label statusLabel;
 
     private volatile List<TableReference> mentionCandidates = List.of();
+    private volatile boolean mentionCandidatesDirty = true;
+    private final Set<DBPDataSourceRegistry> registeredDataSourceRegistries = new HashSet<>();
+    private final Object mentionListenerLock = new Object();
+    private DBPPreferenceStore preferenceStore;
+
+    private final DBPEventListener mentionDataSourceListener = event -> {
+        if (event == null) {
+            return;
+        }
+        DBPEvent.Action action = event.getAction();
+        if (action == DBPEvent.Action.AFTER_CONNECT
+            || action == DBPEvent.Action.OBJECT_ADD
+            || action == DBPEvent.Action.OBJECT_REMOVE
+            || action == DBPEvent.Action.OBJECT_UPDATE) {
+            markMentionCandidatesDirty();
+        }
+    };
+
+    private final DBPPreferenceListener mentionPreferenceListener = event -> {
+        if (event != null && AiPreferenceConstants.PREF_MENTION_CANDIDATE_LIMIT.equals(event.getProperty())) {
+            markMentionCandidatesDirty();
+        }
+    };
+
     private MentionProposalProvider mentionProposalProvider;
     private volatile ChatController activeController;
 
@@ -101,6 +138,7 @@ public final class AiChatViewPart extends ViewPart {
         statusLabel.setText("Ready");
 
         mentionProposalProvider = new MentionProposalProvider(this::currentMentionCandidates);
+        installMentionRefreshHooks();
         installMentionAutocomplete();
 
         sendButton.addListener(SWT.Selection, e -> sendPrompt());
@@ -119,6 +157,8 @@ public final class AiChatViewPart extends ViewPart {
 
     @Override
     public void setFocus() {
+        registerDataSourceListeners();
+        refreshMentionsIfDirty();
         if (inputText != null && !inputText.isDisposed()) {
             inputText.setFocus();
         }
@@ -127,6 +167,7 @@ public final class AiChatViewPart extends ViewPart {
     @Override
     public void dispose() {
         stopPrompt();
+        disposeMentionRefreshHooks();
         super.dispose();
     }
 
@@ -192,15 +233,87 @@ public final class AiChatViewPart extends ViewPart {
     }
 
     private void refreshMentions() {
-        mentionCandidates = mentionCatalog.loadCandidates();
-        setStatus("Autocomplete aktualisiert: " + mentionCandidates.size() + " Tabellen referenzierbar");
+        reloadMentionCandidates(true);
     }
 
     private synchronized List<TableReference> currentMentionCandidates() {
-        if (mentionCandidates.isEmpty()) {
-            mentionCandidates = mentionCatalog.loadCandidates();
-        }
+        reloadMentionCandidates(false);
         return mentionCandidates;
+    }
+
+    private void refreshMentionsIfDirty() {
+        if (mentionCandidatesDirty) {
+            reloadMentionCandidates(false);
+        }
+    }
+
+    private synchronized void reloadMentionCandidates(boolean force) {
+        if (!force && !mentionCandidatesDirty) {
+            return;
+        }
+        registerDataSourceListeners();
+        int mentionCandidateLimit = settingsService.loadSettings().mentionCandidateLimit();
+        mentionCandidates = mentionCatalog.loadCandidates(mentionCandidateLimit);
+        mentionCandidatesDirty = false;
+        setStatus("Autocomplete aktualisiert: " + mentionCandidates.size() + " Tabellen referenzierbar");
+    }
+
+    private void installMentionRefreshHooks() {
+        registerDataSourceListeners();
+        preferenceStore = DBWorkbench.getPlatform().getPreferenceStore();
+        if (preferenceStore != null) {
+            preferenceStore.addPropertyChangeListener(mentionPreferenceListener);
+        }
+    }
+
+    private void disposeMentionRefreshHooks() {
+        if (preferenceStore != null) {
+            preferenceStore.removePropertyChangeListener(mentionPreferenceListener);
+            preferenceStore = null;
+        }
+        synchronized (mentionListenerLock) {
+            for (DBPDataSourceRegistry registry : registeredDataSourceRegistries) {
+                try {
+                    registry.removeDataSourceListener(mentionDataSourceListener);
+                } catch (Exception ex) {
+                    LOG.debug("Failed to remove datasource listener for mention refresh", ex);
+                }
+            }
+            registeredDataSourceRegistries.clear();
+        }
+    }
+
+    private void registerDataSourceListeners() {
+        DBPWorkspace workspace = DBWorkbench.getPlatform().getWorkspace();
+        if (workspace == null) {
+            return;
+        }
+        boolean addedRegistry = false;
+        synchronized (mentionListenerLock) {
+            for (DBPProject project : workspace.getProjects()) {
+                if (project == null) {
+                    continue;
+                }
+                DBPDataSourceRegistry registry = project.getDataSourceRegistry();
+                if (registry == null || registeredDataSourceRegistries.contains(registry)) {
+                    continue;
+                }
+                try {
+                    registry.addDataSourceListener(mentionDataSourceListener);
+                    registeredDataSourceRegistries.add(registry);
+                    addedRegistry = true;
+                } catch (Exception ex) {
+                    LOG.debug("Failed to register datasource listener for mention refresh", ex);
+                }
+            }
+        }
+        if (addedRegistry) {
+            markMentionCandidatesDirty();
+        }
+    }
+
+    private void markMentionCandidatesDirty() {
+        mentionCandidatesDirty = true;
     }
 
     private void installMentionAutocomplete() {

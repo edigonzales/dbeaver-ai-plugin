@@ -27,6 +27,7 @@ public final class AiPreferenceInitializer extends AbstractPreferenceInitializer
             store.setDefault(AiPreferenceConstants.PREF_HISTORY_SIZE, 12);
             store.setDefault(AiPreferenceConstants.PREF_MAX_CONTEXT_TOKENS, 4_000);
             store.setDefault(AiPreferenceConstants.PREF_MENTION_PROPOSAL_LIMIT, AiSettings.DEFAULT_MENTION_PROPOSAL_LIMIT);
+            store.setDefault(AiPreferenceConstants.PREF_MENTION_CANDIDATE_LIMIT, AiSettings.DEFAULT_MENTION_CANDIDATE_LIMIT);
             store.setDefault(AiPreferenceConstants.PREF_TEMPERATURE, 0.0);
             store.setDefault(AiPreferenceConstants.PREF_LLM_LOG_MODE, AiSettings.DEFAULT_LLM_LOG_MODE.name());
             store.setDefault(AiPreferenceConstants.PREF_LANGCHAIN_HTTP_LOGGING, AiSettings.DEFAULT_LANGCHAIN_HTTP_LOGGING);
