@@ -92,7 +92,28 @@ Ergebnis: **BUILD SUCCESSFUL**
    - Längere Anfrage senden, dann `Stop`.
    - Erwartung: Stream stoppt, UI wird wieder freigegeben.
 
-8. Logging-Modi
+8. Prompt-Editor / Splitter
+   - Chat-View vertikal aufziehen und den Trenner zwischen Transcript und Prompt verschieben.
+   - Erwartung: Beide Bereiche lassen sich frei in der Hoehe anpassen.
+   - View schliessen und erneut oeffnen.
+   - Erwartung: Die zuletzt gewaehlte Aufteilung bleibt erhalten.
+
+9. Prompt-Dateien
+   - In der View `Open...` verwenden und eine Textdatei laden.
+   - Erwartung: Der Dateiinhalt erscheint im Prompt-Feld, die View zeigt den Dateinamen an.
+   - Prompt aendern und `Save` ausfuehren.
+   - Erwartung: Die Datei wird aktualisiert, Dirty-Markierung verschwindet.
+   - Bei ungebundenem Prompt `Save` ausfuehren.
+   - Erwartung: `Save As...` wird geoeffnet und speichert den Prompt als neue Datei.
+
+10. Dirty-Schutz
+   - Einen geladenen oder neuen Prompt aendern, ohne zu speichern.
+   - `Open...` oder `Ask AI About Selection` ausloesen.
+   - Erwartung: Dialog mit `Save`, `Verwerfen`, `Abbrechen`.
+   - Nach erfolgreichem `Send` pruefen.
+   - Erwartung: Das Prompt-Feld ist leer und als neuer untitled Entwurf ohne Dirty-Markierung zurueckgesetzt.
+
+11. Logging-Modi
    - Preferences setzen: `LLM Logging = OFF`, Anfrage senden.
    - Erwartung: keine Start/Complete-Infozeilen fuer Request/Response im `Error Log`.
    - Preferences setzen: `LLM Logging = METADATA`, Anfrage senden.
@@ -100,11 +121,11 @@ Ergebnis: **BUILD SUCCESSFUL**
    - Preferences setzen: `LLM Logging = FULL`, Anfrage senden.
    - Erwartung: vollständiger Payload fuer Request/Response im `Error Log` (ggf. in mehreren `part x/y`-Bloecken), sensible Muster maskiert.
 
-9. LangChain HTTP Logging
+12. LangChain HTTP Logging
    - Checkbox `LangChain HTTP Logging (Request/Response)` aktivieren.
    - Erwartung: zusaetzliche LangChain4j-HTTP-Logs je nach Runtime-Logger-Konfiguration; Plugin-eigene Logs bleiben unveraendert.
 
-10. Cache-/Perspektivenfall
+13. Cache-/Perspektivenfall
    - Wenn View/Command fehlt: DBeaver mit `-clean` starten und Perspektive resetten.
    - Erwartung: `AI Chat` ist danach ueber `Show View` und `Find Actions` wieder auffindbar.
 

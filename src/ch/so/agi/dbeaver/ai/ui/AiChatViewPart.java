@@ -23,6 +23,11 @@ import ch.so.agi.dbeaver.ai.mention.MentionProposalProvider;
 import ch.so.agi.dbeaver.ai.mention.MentionTriggerDetector;
 import ch.so.agi.dbeaver.ai.model.ContextBundle;
 import ch.so.agi.dbeaver.ai.model.TableReference;
+import org.eclipse.core.runtime.IProgressMonitor;
+import org.eclipse.jface.action.Action;
+import org.eclipse.jface.action.IMenuManager;
+import org.eclipse.jface.action.IToolBarManager;
+import org.eclipse.jface.dialogs.MessageDialog;
 import org.jkiss.dbeaver.Log;
 import org.jkiss.dbeaver.model.DBPEvent;
 import org.jkiss.dbeaver.model.DBPEventListener;
@@ -39,22 +44,32 @@ import org.eclipse.jface.fieldassist.IContentProposal;
 import org.eclipse.jface.fieldassist.IContentProposalProvider;
 import org.eclipse.jface.fieldassist.TextContentAdapter;
 import org.eclipse.swt.SWT;
+import org.eclipse.swt.custom.SashForm;
 import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.layout.GridLayout;
 import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Display;
+import org.eclipse.swt.widgets.FileDialog;
 import org.eclipse.swt.widgets.Label;
+import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.Text;
+import org.eclipse.ui.ISharedImages;
+import org.eclipse.ui.ISaveablePart;
 import org.eclipse.ui.part.ViewPart;
 
+import java.io.IOException;
+import java.nio.file.InvalidPathException;
+import java.nio.file.Path;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-public final class AiChatViewPart extends ViewPart {
+public final class AiChatViewPart extends ViewPart implements ISaveablePart {
     private static final Log LOG = Log.getLog(AiChatViewPart.class);
     public static final String VIEW_ID = "ch.so.agi.dbeaver.ai.views.chat";
+    private static final int[] DEFAULT_SPLIT_WEIGHTS = new int[]{70, 30};
+    private static final String UNTITLED_PROMPT = "Untitled";
 
     private final AiSettingsService settingsService = new AiSettingsService();
     private final ChatSession chatSession = new ChatSession();
@@ -70,15 +85,22 @@ public final class AiChatViewPart extends ViewPart {
     );
     private final ContextAssembler contextAssembler = new ContextAssembler(new PromptBudgetEstimator());
     private final ContextAwarePromptComposer promptComposer = new ContextAwarePromptComposer();
+    private final PromptFileService promptFileService = new PromptFileService();
+    private final PromptDocumentState promptDocumentState = new PromptDocumentState();
 
+    private SashForm verticalSashForm;
     private Text transcriptText;
     private Text inputText;
     private Button sendButton;
     private Button stopButton;
     private Label statusLabel;
+    private Action openPromptAction;
+    private Action savePromptAction;
+    private Action savePromptAsAction;
 
     private volatile List<TableReference> mentionCandidates = List.of();
     private volatile boolean mentionCandidatesDirty = true;
+    private boolean dirty;
     private final Set<DBPDataSourceRegistry> registeredDataSourceRegistries = new HashSet<>();
     private final Object mentionListenerLock = new Object();
     private DBPPreferenceStore preferenceStore;
@@ -111,26 +133,34 @@ public final class AiChatViewPart extends ViewPart {
         root.setLayout(new GridLayout(1, false));
         root.setLayoutData(new GridData(SWT.FILL, SWT.FILL, true, true));
 
-        transcriptText = new Text(root, SWT.BORDER | SWT.MULTI | SWT.WRAP | SWT.V_SCROLL | SWT.READ_ONLY);
+        verticalSashForm = new SashForm(root, SWT.VERTICAL);
+        verticalSashForm.setLayoutData(new GridData(SWT.FILL, SWT.FILL, true, true));
+
+        transcriptText = new Text(verticalSashForm, SWT.BORDER | SWT.MULTI | SWT.WRAP | SWT.V_SCROLL | SWT.READ_ONLY);
         transcriptText.setLayoutData(new GridData(SWT.FILL, SWT.FILL, true, true));
 
-        Composite inputRow = new Composite(root, SWT.NONE);
-        inputRow.setLayout(new GridLayout(4, false));
-        inputRow.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, true, false));
+        Composite promptArea = new Composite(verticalSashForm, SWT.NONE);
+        promptArea.setLayout(new GridLayout(1, false));
+        promptArea.setLayoutData(new GridData(SWT.FILL, SWT.FILL, true, true));
 
-        inputText = new Text(inputRow, SWT.BORDER | SWT.MULTI | SWT.WRAP | SWT.V_SCROLL);
-        GridData inputGd = new GridData(SWT.FILL, SWT.CENTER, true, false);
-        inputGd.heightHint = 56;
+        inputText = new Text(promptArea, SWT.BORDER | SWT.MULTI | SWT.WRAP | SWT.V_SCROLL);
+        GridData inputGd = new GridData(SWT.FILL, SWT.FILL, true, true);
+        inputGd.heightHint = 120;
         inputText.setLayoutData(inputGd);
+        inputText.addModifyListener(e -> refreshDocumentState());
 
-        sendButton = new Button(inputRow, SWT.PUSH);
+        Composite buttonRow = new Composite(promptArea, SWT.NONE);
+        buttonRow.setLayout(new GridLayout(3, false));
+        buttonRow.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, true, false));
+
+        sendButton = new Button(buttonRow, SWT.PUSH);
         sendButton.setText("Send");
 
-        stopButton = new Button(inputRow, SWT.PUSH);
+        stopButton = new Button(buttonRow, SWT.PUSH);
         stopButton.setText("Stop");
         stopButton.setEnabled(false);
 
-        Button refreshMentionsButton = new Button(inputRow, SWT.PUSH);
+        Button refreshMentionsButton = new Button(buttonRow, SWT.PUSH);
         refreshMentionsButton.setText("Refresh #");
 
         statusLabel = new Label(root, SWT.NONE);
@@ -140,6 +170,10 @@ public final class AiChatViewPart extends ViewPart {
         mentionProposalProvider = new MentionProposalProvider(this::currentMentionCandidates);
         installMentionRefreshHooks();
         installMentionAutocomplete();
+        createViewActions();
+        contributeViewActions();
+        restoreSplitWeights();
+        verticalSashForm.addListener(SWT.Selection, e -> persistSplitWeights());
 
         sendButton.addListener(SWT.Selection, e -> sendPrompt());
         stopButton.addListener(SWT.Selection, e -> stopPrompt());
@@ -152,6 +186,8 @@ public final class AiChatViewPart extends ViewPart {
             }
         });
 
+        promptDocumentState.resetToUntitled("");
+        refreshDocumentState();
         appendLine("AI Chat bereit. Verwende #datasource.schema.table für Tabellenkontext.");
     }
 
@@ -167,17 +203,336 @@ public final class AiChatViewPart extends ViewPart {
     @Override
     public void dispose() {
         stopPrompt();
+        persistSplitWeights();
         disposeMentionRefreshHooks();
         super.dispose();
     }
 
     public void prefillPrompt(String text) {
+        replacePromptWithUntitledDraft(text);
+    }
+
+    public boolean replacePromptWithUntitledDraft(String text) {
         if (inputText == null || inputText.isDisposed()) {
-            return;
+            return false;
         }
-        inputText.setText(text == null ? "" : text);
+        if (!confirmProceedWithDirtyPrompt("der Prompt ersetzt wird")) {
+            return false;
+        }
+        promptDocumentState.resetToUntitled("");
+        String nextText = text == null ? "" : text;
+        if (!nextText.equals(inputText.getText())) {
+            inputText.setText(nextText);
+        }
+        refreshDocumentState();
         inputText.setFocus();
         inputText.setSelection(inputText.getText().length());
+        return true;
+    }
+
+    @Override
+    public void doSave(IProgressMonitor monitor) {
+        savePrompt(false);
+    }
+
+    @Override
+    public void doSaveAs() {
+        savePrompt(true);
+    }
+
+    @Override
+    public boolean isDirty() {
+        return dirty;
+    }
+
+    @Override
+    public boolean isSaveAsAllowed() {
+        return true;
+    }
+
+    @Override
+    public boolean isSaveOnCloseNeeded() {
+        return isDirty();
+    }
+
+    private void createViewActions() {
+        ISharedImages sharedImages = getSite().getWorkbenchWindow().getWorkbench().getSharedImages();
+
+        openPromptAction = new Action("Open...") {
+            @Override
+            public void run() {
+                openPrompt();
+            }
+        };
+        openPromptAction.setToolTipText("Open prompt from file");
+        openPromptAction.setImageDescriptor(sharedImages.getImageDescriptor(ISharedImages.IMG_OBJ_FOLDER));
+
+        savePromptAction = new Action("Save") {
+            @Override
+            public void run() {
+                doSave(null);
+            }
+        };
+        savePromptAction.setToolTipText("Save prompt");
+        savePromptAction.setImageDescriptor(sharedImages.getImageDescriptor(ISharedImages.IMG_ETOOL_SAVE_EDIT));
+
+        savePromptAsAction = new Action("Save As...") {
+            @Override
+            public void run() {
+                doSaveAs();
+            }
+        };
+        savePromptAsAction.setToolTipText("Save prompt as");
+        savePromptAsAction.setImageDescriptor(sharedImages.getImageDescriptor(ISharedImages.IMG_ETOOL_SAVEAS_EDIT));
+    }
+
+    private void contributeViewActions() {
+        IToolBarManager toolBarManager = getViewSite().getActionBars().getToolBarManager();
+        IMenuManager menuManager = getViewSite().getActionBars().getMenuManager();
+
+        toolBarManager.add(openPromptAction);
+        toolBarManager.add(savePromptAction);
+        toolBarManager.add(savePromptAsAction);
+
+        menuManager.add(openPromptAction);
+        menuManager.add(savePromptAction);
+        menuManager.add(savePromptAsAction);
+
+        getViewSite().getActionBars().updateActionBars();
+    }
+
+    private void openPrompt() {
+        if (!confirmProceedWithDirtyPrompt("ein Prompt geladen wird")) {
+            return;
+        }
+        Path targetPath = choosePromptPath(false);
+        if (targetPath == null) {
+            return;
+        }
+
+        try {
+            String content = promptFileService.load(targetPath);
+            promptDocumentState.markOpened(targetPath, content);
+            if (!content.equals(inputText.getText())) {
+                inputText.setText(content);
+            }
+            rememberLastPromptPath(targetPath);
+            refreshDocumentState();
+            setStatus("Prompt geladen: " + targetPath.getFileName());
+            inputText.setFocus();
+            inputText.setSelection(inputText.getText().length());
+        } catch (IOException ex) {
+            LOG.error("Failed to open prompt file", ex);
+            MessageDialog.openError(shell(), "Prompt öffnen", "Datei konnte nicht geladen werden:\n" + ex.getMessage());
+            setStatus("Prompt konnte nicht geladen werden");
+        }
+    }
+
+    private boolean savePrompt(boolean forceSaveAs) {
+        if (inputText == null || inputText.isDisposed()) {
+            return false;
+        }
+        Path targetPath = forceSaveAs ? choosePromptPath(true) : currentPromptPath();
+        if (targetPath == null && !forceSaveAs) {
+            return savePrompt(true);
+        }
+        if (targetPath == null) {
+            return false;
+        }
+
+        String content = currentPromptText();
+        try {
+            promptFileService.save(targetPath, content);
+            promptDocumentState.markSaved(targetPath, content);
+            rememberLastPromptPath(targetPath);
+            refreshDocumentState();
+            setStatus("Prompt gespeichert: " + targetPath.getFileName());
+            return true;
+        } catch (IOException ex) {
+            LOG.error("Failed to save prompt file", ex);
+            MessageDialog.openError(shell(), "Prompt speichern", "Datei konnte nicht gespeichert werden:\n" + ex.getMessage());
+            setStatus("Prompt konnte nicht gespeichert werden");
+            return false;
+        }
+    }
+
+    private Path choosePromptPath(boolean saveDialog) {
+        FileDialog dialog = new FileDialog(shell(), saveDialog ? SWT.SAVE : SWT.OPEN);
+        dialog.setText(saveDialog ? "Save Prompt As..." : "Open Prompt");
+        dialog.setFilterExtensions(new String[]{"*.txt", "*.*"});
+        if (saveDialog) {
+            dialog.setOverwrite(true);
+        }
+
+        Path suggestion = initialPromptDialogPath(saveDialog);
+        if (suggestion != null) {
+            Path parent = suggestion.getParent();
+            if (parent != null) {
+                dialog.setFilterPath(parent.toString());
+            }
+            Path fileName = suggestion.getFileName();
+            if (fileName != null) {
+                dialog.setFileName(fileName.toString());
+            }
+        } else if (saveDialog) {
+            dialog.setFileName("prompt.txt");
+        }
+
+        String selected = dialog.open();
+        if (selected == null || selected.isBlank()) {
+            return null;
+        }
+        try {
+            return Path.of(selected).toAbsolutePath().normalize();
+        } catch (InvalidPathException ex) {
+            MessageDialog.openError(shell(), saveDialog ? "Prompt speichern" : "Prompt öffnen", "Ungültiger Dateipfad:\n" + selected);
+            return null;
+        }
+    }
+
+    private Path initialPromptDialogPath(boolean saveDialog) {
+        Path currentPath = currentPromptPath();
+        if (currentPath != null) {
+            return currentPath;
+        }
+
+        String lastPath = readPreference(AiPreferenceConstants.PREF_LAST_PROMPT_PATH);
+        if (lastPath != null && !lastPath.isBlank()) {
+            try {
+                return Path.of(lastPath).toAbsolutePath().normalize();
+            } catch (InvalidPathException ex) {
+                LOG.debug("Ignoring invalid last prompt path", ex);
+            }
+        }
+        return saveDialog ? Path.of("prompt.txt") : null;
+    }
+
+    private Path currentPromptPath() {
+        return promptDocumentState.boundPath();
+    }
+
+    private boolean confirmProceedWithDirtyPrompt(String actionDescription) {
+        if (!isDirty()) {
+            return true;
+        }
+
+        MessageDialog dialog = new MessageDialog(
+            shell(),
+            "Ungespeicherter Prompt",
+            null,
+            "Der aktuelle Prompt enthält ungespeicherte Änderungen. Soll er gespeichert werden, bevor " + actionDescription + "?",
+            MessageDialog.QUESTION,
+            new String[]{"Save", "Verwerfen", "Abbrechen"},
+            0
+        );
+        int choice = dialog.open();
+        if (choice == 0) {
+            return savePrompt(false);
+        }
+        return choice == 1;
+    }
+
+    private void refreshDocumentState() {
+        boolean nextDirty = promptDocumentState.isDirty(currentPromptText());
+        if (dirty != nextDirty) {
+            dirty = nextDirty;
+            firePropertyChange(PROP_DIRTY);
+        }
+        updateDocumentPresentation();
+    }
+
+    private void updateDocumentPresentation() {
+        String label = currentPromptPath() == null ? UNTITLED_PROMPT : currentPromptPath().getFileName().toString();
+        if (dirty) {
+            label = label + " *";
+        }
+        setContentDescription(label);
+        updateActionEnablement();
+    }
+
+    private void updateActionEnablement() {
+        if (savePromptAction != null) {
+            savePromptAction.setEnabled(isDirty());
+        }
+        if (savePromptAsAction != null) {
+            savePromptAsAction.setEnabled(true);
+        }
+        if (openPromptAction != null) {
+            openPromptAction.setEnabled(true);
+        }
+        if (getViewSite() != null) {
+            getViewSite().getActionBars().updateActionBars();
+        }
+    }
+
+    private void rememberLastPromptPath(Path path) {
+        writePreference(AiPreferenceConstants.PREF_LAST_PROMPT_PATH, path.toString());
+    }
+
+    private void restoreSplitWeights() {
+        if (verticalSashForm == null || verticalSashForm.isDisposed()) {
+            return;
+        }
+        verticalSashForm.setWeights(parseSplitWeights(readPreference(AiPreferenceConstants.PREF_CHAT_SPLIT_WEIGHTS)));
+    }
+
+    private void persistSplitWeights() {
+        if (verticalSashForm == null || verticalSashForm.isDisposed()) {
+            return;
+        }
+        int[] weights = verticalSashForm.getWeights();
+        if (weights.length != 2 || weights[0] <= 0 || weights[1] <= 0) {
+            return;
+        }
+        writePreference(AiPreferenceConstants.PREF_CHAT_SPLIT_WEIGHTS, weights[0] + "," + weights[1]);
+    }
+
+    private int[] parseSplitWeights(String value) {
+        if (value == null || value.isBlank()) {
+            return DEFAULT_SPLIT_WEIGHTS.clone();
+        }
+        String[] parts = value.split(",");
+        if (parts.length != 2) {
+            return DEFAULT_SPLIT_WEIGHTS.clone();
+        }
+        try {
+            int first = Integer.parseInt(parts[0].trim());
+            int second = Integer.parseInt(parts[1].trim());
+            if (first <= 0 || second <= 0) {
+                return DEFAULT_SPLIT_WEIGHTS.clone();
+            }
+            return new int[]{first, second};
+        } catch (NumberFormatException ex) {
+            return DEFAULT_SPLIT_WEIGHTS.clone();
+        }
+    }
+
+    private String readPreference(String key) {
+        DBPPreferenceStore store = DBWorkbench.getPlatform().getPreferenceStore();
+        return store == null ? "" : store.getString(key);
+    }
+
+    private void writePreference(String key, String value) {
+        DBPPreferenceStore store = DBWorkbench.getPlatform().getPreferenceStore();
+        if (store == null) {
+            return;
+        }
+        store.setValue(key, value == null ? "" : value);
+        if (store.needsSaving()) {
+            try {
+                store.save();
+            } catch (IOException ex) {
+                LOG.warn("Failed to save preference " + key, ex);
+            }
+        }
+    }
+
+    private String currentPromptText() {
+        if (inputText == null || inputText.isDisposed()) {
+            return "";
+        }
+        String text = inputText.getText();
+        return text == null ? "" : text;
     }
 
     private void sendPrompt() {
@@ -194,7 +549,11 @@ public final class AiChatViewPart extends ViewPart {
             return;
         }
 
-        inputText.setText("");
+        promptDocumentState.resetToUntitled("");
+        if (!inputText.getText().isEmpty()) {
+            inputText.setText("");
+        }
+        refreshDocumentState();
 
         LlmClient llmClient = new LangChain4jOpenAiClient(
             settings.baseUrl(),
@@ -378,6 +737,10 @@ public final class AiChatViewPart extends ViewPart {
                 runnable.run();
             });
         }
+    }
+
+    private Shell shell() {
+        return getSite() == null ? Display.getDefault().getActiveShell() : getSite().getShell();
     }
 
     private final class ViewChatUiListener implements ChatUiListener {

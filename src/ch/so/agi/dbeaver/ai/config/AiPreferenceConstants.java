@@ -20,6 +20,8 @@ public final class AiPreferenceConstants {
     public static final String PREF_TEMPERATURE = "ch.so.agi.dbeaver.ai.temperature";
     public static final String PREF_LLM_LOG_MODE = "ch.so.agi.dbeaver.ai.llmLogMode";
     public static final String PREF_LANGCHAIN_HTTP_LOGGING = "ch.so.agi.dbeaver.ai.langchainHttpLogging";
+    public static final String PREF_CHAT_SPLIT_WEIGHTS = "ch.so.agi.dbeaver.ai.chatSplitWeights";
+    public static final String PREF_LAST_PROMPT_PATH = "ch.so.agi.dbeaver.ai.lastPromptPath";
 
     public static final String SECRET_OPENAI_API_TOKEN = "ch.so.agi.dbeaver.ai.openai.apiToken";
 }

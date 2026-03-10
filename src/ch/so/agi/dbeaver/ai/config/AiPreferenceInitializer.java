@@ -31,6 +31,8 @@ public final class AiPreferenceInitializer extends AbstractPreferenceInitializer
             store.setDefault(AiPreferenceConstants.PREF_TEMPERATURE, 0.0);
             store.setDefault(AiPreferenceConstants.PREF_LLM_LOG_MODE, AiSettings.DEFAULT_LLM_LOG_MODE.name());
             store.setDefault(AiPreferenceConstants.PREF_LANGCHAIN_HTTP_LOGGING, AiSettings.DEFAULT_LANGCHAIN_HTTP_LOGGING);
+            store.setDefault(AiPreferenceConstants.PREF_CHAT_SPLIT_WEIGHTS, "70,30");
+            store.setDefault(AiPreferenceConstants.PREF_LAST_PROMPT_PATH, "");
 
             LOG.debug("AI plugin default preferences initialized successfully");
         } catch (Exception e) {

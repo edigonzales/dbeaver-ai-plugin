@@ -21,7 +21,7 @@ public final class AskWithSelectionHandler extends AbstractHandler {
             AiChatViewPart view = (AiChatViewPart) page.showView(AiChatViewPart.VIEW_ID);
             String selectedText = readSelection(event);
             if (!selectedText.isBlank()) {
-                view.prefillPrompt("Bitte erkläre oder verbessere folgenden SQL/Text:\n" + selectedText);
+                view.replacePromptWithUntitledDraft("Bitte erkläre oder verbessere folgenden SQL/Text:\n" + selectedText);
             }
         } catch (PartInitException e) {
             throw new ExecutionException("Unable to open AI chat view", e);
