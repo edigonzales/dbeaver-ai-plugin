@@ -91,6 +91,10 @@ Ergebnis: **BUILD SUCCESSFUL**
 7. Streaming + Stop
    - Längere Anfrage senden, dann `Stop`.
    - Erwartung: Stream stoppt, UI wird wieder freigegeben.
+   - Nach `Send` ohne sofortige Token-Antwort auf den Chat schauen.
+   - Erwartung: Ein sichtbarer Busy-Strip erscheint, `Send` zeigt `Working...` und im Transcript steht direkt `AI> ...`.
+   - Sobald die ersten Tokens eintreffen oder der Run beendet/gestoppt wird, erneut prüfen.
+   - Erwartung: Der Platzhalter wird durch die echte Antwort ersetzt bzw. bei Fehler/Stop entfernt; der Busy-Strip verschwindet.
 
 8. Prompt-Editor / Splitter
    - Chat-View vertikal aufziehen und den Trenner zwischen Transcript und Prompt verschieben.
@@ -105,13 +109,17 @@ Ergebnis: **BUILD SUCCESSFUL**
    - Erwartung: Die Datei wird aktualisiert, Dirty-Markierung verschwindet.
    - Bei ungebundenem Prompt `Save` ausfuehren.
    - Erwartung: `Save As...` wird geoeffnet und speichert den Prompt als neue Datei.
+   - Prompt A speichern, senden, neuen Prompt B schreiben und erneut `Save` ausfuehren.
+   - Erwartung: Dieselbe Datei enthaelt Prompt A plus einen getrennten `USER MESSAGE`-Block fuer Prompt B.
+   - Prompt B vor dem Senden aendern und nochmals `Save` ausfuehren.
+   - Erwartung: Der letzte `USER MESSAGE`-Block wird ersetzt, nicht verdoppelt.
 
 10. Dirty-Schutz
    - Einen geladenen oder neuen Prompt aendern, ohne zu speichern.
    - `Open...` oder `Ask AI About Selection` ausloesen.
    - Erwartung: Dialog mit `Save`, `Verwerfen`, `Abbrechen`.
    - Nach erfolgreichem `Send` pruefen.
-   - Erwartung: Das Prompt-Feld ist leer und als neuer untitled Entwurf ohne Dirty-Markierung zurueckgesetzt.
+   - Erwartung: Das Prompt-Feld ist leer und ohne Dirty-Markierung zurueckgesetzt; bei gebundener Datei bleibt die Dateibindung fuer den naechsten Append erhalten.
 
 11. Logging-Modi
    - Preferences setzen: `LLM Logging = OFF`, Anfrage senden.
@@ -128,6 +136,14 @@ Ergebnis: **BUILD SUCCESSFUL**
 13. Cache-/Perspektivenfall
    - Wenn View/Command fehlt: DBeaver mit `-clean` starten und Perspektive resetten.
    - Erwartung: `AI Chat` ist danach ueber `Show View` und `Find Actions` wieder auffindbar.
+
+14. `@sql`-Injection
+   - Im SQL-Editor eine Query markieren und im AI Chat einen Prompt mit `@sql` senden.
+   - Erwartung: Die Anfrage laeuft mit der markierten SQL als zusaetzlichem Prompt-Abschnitt; im sichtbaren Chat bleibt der rohe User-Text mit `@sql`.
+   - Ohne markierte Query, aber mit Cursor in einer aktiven Query, erneut `@sql` senden.
+   - Erwartung: Die Query unter dem Cursor wird verwendet.
+   - `@sql` ohne aktiven SQL-Editor oder ohne extrahierbare Query senden.
+   - Erwartung: Der Request laeuft weiter und im Chat erscheint nur eine Warnung.
 
 ## Bekannte Grenzen der aktuellen Tests
 

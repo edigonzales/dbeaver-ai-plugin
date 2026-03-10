@@ -51,21 +51,24 @@ public final class ChatController {
 
     public void send(
         String systemPrompt,
-        String userPrompt,
+        PromptAugmentation promptAugmentation,
         ChatRequestOptions options,
         ChatUiListener listener
     ) {
         Objects.requireNonNull(listener, "listener");
         Objects.requireNonNull(options, "options");
+        Objects.requireNonNull(promptAugmentation, "promptAugmentation");
 
         cancelActiveRequest();
 
         List<ChatMessage> historyBeforeCurrent = session.recentHistory(options.historySize());
+        String rawUserPrompt = promptAugmentation.rawUserPrompt();
+        String normalizedUserPrompt = promptAugmentation.normalizedUserPrompt();
 
-        listener.onBeforeSend(userPrompt);
-        session.addUser(userPrompt);
+        listener.onBeforeSend(rawUserPrompt);
+        session.addUser(rawUserPrompt);
 
-        List<TableReference> references = mentionParser.parseReferences(userPrompt);
+        List<TableReference> references = mentionParser.parseReferences(normalizedUserPrompt);
         ContextBundle contextBundle = contextEnricher.build(
             references,
             options.maxReferencedTables(),
@@ -79,11 +82,18 @@ public final class ChatController {
         String promptBlock = contextAssembler.toPromptBlock(boundedContext);
 
         listener.onContextBuilt(boundedContext, promptBlock);
+        for (String warning : promptAugmentation.warnings()) {
+            listener.onWarning(warning);
+        }
         for (String warning : boundedContext.warnings()) {
             listener.onWarning(warning);
         }
 
-        String composedUserPrompt = promptComposer.composeUserPrompt(userPrompt, promptBlock);
+        String composedUserPrompt = promptComposer.composeUserPrompt(
+            normalizedUserPrompt,
+            promptBlock,
+            promptAugmentation.sqlContextBlock()
+        );
 
         LlmRequest llmRequest = new LlmRequest(
             systemPrompt,

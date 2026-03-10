@@ -8,48 +8,68 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class PromptDocumentStateTest {
     @Test
-    void tracksDirtyStateAcrossSaveSaveAsOpenAndReset() {
+    void keepsBindingAndSwitchesToAppendModeAfterSend() {
         PromptDocumentState state = new PromptDocumentState();
+        Path promptPath = Path.of("prompts/history.txt");
 
-        state.resetToUntitled("");
-        assertThat(state.hasBoundPath()).isFalse();
-        assertThat(state.isDirty("")).isFalse();
-        assertThat(state.isDirty("Frage 1")).isTrue();
+        state.markSavedDraft(promptPath, "Prompt A");
+        state.markSent();
 
-        Path originalPath = Path.of("prompts/original.txt");
-        state.markSaved(originalPath, "Frage 1");
-        assertThat(state.boundPath()).isEqualTo(originalPath.toAbsolutePath().normalize());
-        assertThat(state.isDirty("Frage 1")).isFalse();
-        assertThat(state.isDirty("Frage 2")).isTrue();
-
-        Path saveAsPath = Path.of("prompts/neu.txt");
-        state.markSaved(saveAsPath, "Frage 2");
-        assertThat(state.boundPath()).isEqualTo(saveAsPath.toAbsolutePath().normalize());
-        assertThat(state.isDirty("Frage 2")).isFalse();
-
-        state.markOpened(originalPath, "Geladener Prompt");
-        assertThat(state.boundPath()).isEqualTo(originalPath.toAbsolutePath().normalize());
-        assertThat(state.isDirty("Geladener Prompt")).isFalse();
-        assertThat(state.isDirty("Lokal geändert")).isTrue();
-
-        state.resetToUntitled("");
-        assertThat(state.hasBoundPath()).isFalse();
-        assertThat(state.boundPath()).isNull();
+        assertThat(state.boundPath()).isEqualTo(promptPath.toAbsolutePath().normalize());
+        assertThat(state.persistenceMode()).isEqualTo(PromptPersistenceMode.APPEND_LOG);
         assertThat(state.savedContent()).isEmpty();
+        assertThat(state.lastSavedAppendTail()).isNull();
         assertThat(state.isDirty("")).isFalse();
-        assertThat(state.isDirty("Neuer Entwurf")).isTrue();
+        assertThat(state.isDirty("Prompt B")).isTrue();
     }
 
     @Test
-    void resetToUntitledClearsExistingFileBinding() {
+    void tracksSavedAppendEntryForCurrentDraft() {
+        PromptDocumentState state = new PromptDocumentState();
+        Path promptPath = Path.of("prompts/history.txt");
+
+        state.markSavedDraft(promptPath, "Prompt A");
+        state.markSent();
+        state.markSavedLogEntry(promptPath, "Prompt B", "\n\n===== USER MESSAGE | 2026-03-10 14:32:01 CET =====\nPrompt B");
+
+        assertThat(state.boundPath()).isEqualTo(promptPath.toAbsolutePath().normalize());
+        assertThat(state.persistenceMode()).isEqualTo(PromptPersistenceMode.APPEND_LOG);
+        assertThat(state.savedContent()).isEqualTo("Prompt B");
+        assertThat(state.lastSavedAppendTail()).contains("Prompt B");
+        assertThat(state.isDirty("Prompt B")).isFalse();
+        assertThat(state.isDirty("Prompt B angepasst")).isTrue();
+    }
+
+    @Test
+    void openedFileReturnsToOverwriteMode() {
+        PromptDocumentState state = new PromptDocumentState();
+        Path promptPath = Path.of("prompts/history.txt");
+
+        state.markSavedLogEntry(promptPath, "Prompt B", "\n\n===== USER MESSAGE | 2026-03-10 14:32:01 CET =====\nPrompt B");
+        state.markOpened(promptPath, "Bestehender Dateiinhalt");
+
+        assertThat(state.boundPath()).isEqualTo(promptPath.toAbsolutePath().normalize());
+        assertThat(state.persistenceMode()).isEqualTo(PromptPersistenceMode.OVERWRITE_DRAFT);
+        assertThat(state.lastSavedAppendTail()).isNull();
+        assertThat(state.isDirty("Bestehender Dateiinhalt")).isFalse();
+        assertThat(state.isDirty("Geaenderter Dateiinhalt")).isTrue();
+    }
+
+    @Test
+    void resetToUntitledClearsBindingAndAppendTracking() {
         PromptDocumentState state = new PromptDocumentState();
 
-        state.markOpened(Path.of("prompts/existing.txt"), "Bestehender Inhalt");
+        state.markSavedLogEntry(
+            Path.of("prompts/history.txt"),
+            "Prompt B",
+            "\n\n===== USER MESSAGE | 2026-03-10 14:32:01 CET =====\nPrompt B"
+        );
         state.resetToUntitled("");
 
         assertThat(state.hasBoundPath()).isFalse();
         assertThat(state.boundPath()).isNull();
+        assertThat(state.persistenceMode()).isEqualTo(PromptPersistenceMode.OVERWRITE_DRAFT);
         assertThat(state.savedContent()).isEmpty();
-        assertThat(state.isDirty("")).isFalse();
+        assertThat(state.lastSavedAppendTail()).isNull();
     }
 }

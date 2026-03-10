@@ -76,7 +76,7 @@ class ChatControllerTest {
 
         controller.send(
             "system",
-            "Analyse #db.s.users",
+            PromptAugmentation.raw("Analyse #db.s.users"),
             new ChatRequestOptions(8, 5, 30, true, true, 2_000, 10),
             ui
         );
@@ -133,7 +133,7 @@ class ChatControllerTest {
 
         controller.send(
             "system",
-            "hello",
+            PromptAugmentation.raw("hello"),
             new ChatRequestOptions(1, 1, 1, false, false, 1000, 0),
             new RecordingUiListener()
         );
@@ -185,7 +185,7 @@ class ChatControllerTest {
 
         controller.send(
             "system",
-            "Neue Frage ohne doppelte History",
+            PromptAugmentation.raw("Neue Frage ohne doppelte History"),
             new ChatRequestOptions(1, 1, 1, false, false, 1000, 10),
             new RecordingUiListener()
         );
@@ -196,6 +196,68 @@ class ChatControllerTest {
         assertThat(request.history()).hasSize(2);
         assertThat(request.history()).extracting(m -> m.text())
             .containsExactly("Vorherige Frage", "Vorherige Antwort");
+    }
+
+    @Test
+    void rawUserPromptStaysInSessionWhileSqlInjectionIsAddedToLlmRequest() {
+        ChatSession session = new ChatSession();
+
+        ContextEnricher enricher = new ContextEnricher(
+            refs -> new ResolvedTableResult(List.of(), List.of()),
+            table -> "",
+            new SampleRowsCollector() {
+                @Override
+                public List<TableSampleRow> collect(ResolvedTable resolvedTable, int maxRows, int maxColumns) {
+                    return List.of();
+                }
+
+                @Override
+                public String createSampleQueryText(ResolvedTable resolvedTable, int maxRows) {
+                    return "";
+                }
+            },
+            new SensitiveDataMasker()
+        );
+
+        AtomicReference<LlmRequest> capturedRequest = new AtomicReference<>();
+        LlmClient llmClient = (request, listener) -> {
+            capturedRequest.set(request);
+            listener.onComplete("ok");
+            return () -> {
+            };
+        };
+
+        ChatController controller = new ChatController(
+            session,
+            new MentionParser(),
+            enricher,
+            new ContextAssembler(new PromptBudgetEstimator()),
+            new ContextAwarePromptComposer(),
+            llmClient
+        );
+        RecordingUiListener ui = new RecordingUiListener();
+
+        controller.send(
+            "system",
+            new PromptAugmentation(
+                "Analysiere @sql",
+                "Analysiere",
+                "SELECT * FROM users;",
+                List.of("sql warning")
+            ),
+            new ChatRequestOptions(1, 1, 1, false, false, 1000, 10),
+            ui
+        );
+
+        assertThat(session.snapshot()).extracting(m -> m.text())
+            .containsExactly("Analysiere @sql", "ok");
+        assertThat(ui.warnings).contains("sql warning");
+
+        LlmRequest request = capturedRequest.get();
+        assertThat(request).isNotNull();
+        assertThat(request.userPrompt()).contains("## SQL aus dem aktiven Editor (automatisch eingefuegt)");
+        assertThat(request.userPrompt()).contains("SELECT * FROM users;");
+        assertThat(request.userPrompt()).doesNotContain("@sql");
     }
 
     private static final class RecordingUiListener implements ChatUiListener {

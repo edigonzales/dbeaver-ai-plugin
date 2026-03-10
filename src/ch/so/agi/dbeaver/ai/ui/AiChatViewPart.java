@@ -1,6 +1,7 @@
 package ch.so.agi.dbeaver.ai.ui;
 
 import ch.so.agi.dbeaver.ai.chat.ChatController;
+import ch.so.agi.dbeaver.ai.chat.PromptAugmentation;
 import ch.so.agi.dbeaver.ai.chat.ChatSession;
 import ch.so.agi.dbeaver.ai.chat.ChatUiListener;
 import ch.so.agi.dbeaver.ai.config.AiPreferenceConstants;
@@ -52,6 +53,7 @@ import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.FileDialog;
 import org.eclipse.swt.widgets.Label;
+import org.eclipse.swt.widgets.ProgressBar;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.Text;
 import org.eclipse.ui.ISharedImages;
@@ -70,6 +72,12 @@ public final class AiChatViewPart extends ViewPart implements ISaveablePart {
     public static final String VIEW_ID = "ch.so.agi.dbeaver.ai.views.chat";
     private static final int[] DEFAULT_SPLIT_WEIGHTS = new int[]{70, 30};
     private static final String UNTITLED_PROMPT = "Untitled";
+    private static final String SEND_BUTTON_TEXT = "Send";
+    private static final String SEND_BUTTON_BUSY_TEXT = "Working...";
+    private static final String SEND_BUTTON_TOOLTIP = "Send prompt";
+    private static final String SEND_BUTTON_BUSY_TOOLTIP = "LLM arbeitet...";
+    private static final String ASSISTANT_PROMPT_PREFIX = "AI> ";
+    private static final String ASSISTANT_PLACEHOLDER = "...";
 
     private final AiSettingsService settingsService = new AiSettingsService();
     private final ChatSession chatSession = new ChatSession();
@@ -87,12 +95,14 @@ public final class AiChatViewPart extends ViewPart implements ISaveablePart {
     private final ContextAwarePromptComposer promptComposer = new ContextAwarePromptComposer();
     private final PromptFileService promptFileService = new PromptFileService();
     private final PromptDocumentState promptDocumentState = new PromptDocumentState();
+    private final SqlPromptInjectionResolver sqlPromptInjectionResolver = new SqlPromptInjectionResolver();
 
     private SashForm verticalSashForm;
     private Text transcriptText;
     private Text inputText;
     private Button sendButton;
     private Button stopButton;
+    private ProgressBar busyProgressBar;
     private Label statusLabel;
     private Action openPromptAction;
     private Action savePromptAction;
@@ -104,6 +114,9 @@ public final class AiChatViewPart extends ViewPart implements ISaveablePart {
     private final Set<DBPDataSourceRegistry> registeredDataSourceRegistries = new HashSet<>();
     private final Object mentionListenerLock = new Object();
     private DBPPreferenceStore preferenceStore;
+    private boolean awaitingFirstAssistantChunk;
+    private int assistantContentOffset = -1;
+    private int assistantContentLength;
 
     private final DBPEventListener mentionDataSourceListener = event -> {
         if (event == null) {
@@ -154,7 +167,8 @@ public final class AiChatViewPart extends ViewPart implements ISaveablePart {
         buttonRow.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, true, false));
 
         sendButton = new Button(buttonRow, SWT.PUSH);
-        sendButton.setText("Send");
+        sendButton.setText(SEND_BUTTON_TEXT);
+        sendButton.setToolTipText(SEND_BUTTON_TOOLTIP);
 
         stopButton = new Button(buttonRow, SWT.PUSH);
         stopButton.setText("Stop");
@@ -163,9 +177,22 @@ public final class AiChatViewPart extends ViewPart implements ISaveablePart {
         Button refreshMentionsButton = new Button(buttonRow, SWT.PUSH);
         refreshMentionsButton.setText("Refresh #");
 
-        statusLabel = new Label(root, SWT.NONE);
+        Composite statusRow = new Composite(root, SWT.NONE);
+        GridLayout statusRowLayout = new GridLayout(2, false);
+        statusRowLayout.marginWidth = 0;
+        statusRowLayout.marginHeight = 0;
+        statusRow.setLayout(statusRowLayout);
+        statusRow.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, true, false));
+
+        busyProgressBar = new ProgressBar(statusRow, SWT.INDETERMINATE);
+        GridData busyProgressBarLayout = new GridData(SWT.FILL, SWT.CENTER, false, false);
+        busyProgressBarLayout.widthHint = 140;
+        busyProgressBar.setLayoutData(busyProgressBarLayout);
+
+        statusLabel = new Label(statusRow, SWT.NONE);
         statusLabel.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, true, false));
         statusLabel.setText("Ready");
+        setBusyIndicatorVisible(false);
 
         mentionProposalProvider = new MentionProposalProvider(this::currentMentionCandidates);
         installMentionRefreshHooks();
@@ -188,7 +215,7 @@ public final class AiChatViewPart extends ViewPart implements ISaveablePart {
 
         promptDocumentState.resetToUntitled("");
         refreshDocumentState();
-        appendLine("AI Chat bereit. Verwende #datasource.schema.table für Tabellenkontext.");
+        appendLine("AI Chat bereit. Verwende #datasource.schema.table fuer Tabellenkontext oder @sql fuer die aktive Query.");
     }
 
     @Override
@@ -219,7 +246,6 @@ public final class AiChatViewPart extends ViewPart implements ISaveablePart {
         if (!confirmProceedWithDirtyPrompt("der Prompt ersetzt wird")) {
             return false;
         }
-        promptDocumentState.resetToUntitled("");
         String nextText = text == null ? "" : text;
         if (!nextText.equals(inputText.getText())) {
             inputText.setText(nextText);
@@ -332,6 +358,9 @@ public final class AiChatViewPart extends ViewPart implements ISaveablePart {
         if (inputText == null || inputText.isDisposed()) {
             return false;
         }
+        if (!forceSaveAs && !isDirty()) {
+            return true;
+        }
         Path targetPath = forceSaveAs ? choosePromptPath(true) : currentPromptPath();
         if (targetPath == null && !forceSaveAs) {
             return savePrompt(true);
@@ -342,8 +371,22 @@ public final class AiChatViewPart extends ViewPart implements ISaveablePart {
 
         String content = currentPromptText();
         try {
-            promptFileService.save(targetPath, content);
-            promptDocumentState.markSaved(targetPath, content);
+            if (promptDocumentState.persistenceMode() == PromptPersistenceMode.APPEND_LOG) {
+                String persistedTail;
+                if (promptDocumentState.lastSavedAppendTail() == null) {
+                    persistedTail = promptFileService.appendLogEntry(targetPath, PromptLogEntry.now(content));
+                } else {
+                    persistedTail = promptFileService.replaceLastLogEntryOrAppend(
+                        targetPath,
+                        promptDocumentState.lastSavedAppendTail(),
+                        PromptLogEntry.now(content)
+                    );
+                }
+                promptDocumentState.markSavedLogEntry(targetPath, content, persistedTail);
+            } else {
+                promptFileService.saveDraft(targetPath, content);
+                promptDocumentState.markSavedDraft(targetPath, content);
+            }
             rememberLastPromptPath(targetPath);
             refreshDocumentState();
             setStatus("Prompt gespeichert: " + targetPath.getFileName());
@@ -549,7 +592,8 @@ public final class AiChatViewPart extends ViewPart implements ISaveablePart {
             return;
         }
 
-        promptDocumentState.resetToUntitled("");
+        PromptAugmentation promptAugmentation = sqlPromptInjectionResolver.resolve(userPrompt);
+        promptDocumentState.markSent();
         if (!inputText.getText().isEmpty()) {
             inputText.setText("");
         }
@@ -575,7 +619,7 @@ public final class AiChatViewPart extends ViewPart implements ISaveablePart {
         );
         activeController = controller;
 
-        controller.send(settings.systemPrompt(), userPrompt, settings.toChatRequestOptions(), new ViewChatUiListener());
+        controller.send(settings.systemPrompt(), promptAugmentation, settings.toChatRequestOptions(), new ViewChatUiListener());
     }
 
     private void stopPrompt() {
@@ -584,11 +628,8 @@ public final class AiChatViewPart extends ViewPart implements ISaveablePart {
             controller.cancelActiveRequest();
         }
         activeController = null;
-        ui(() -> {
-            sendButton.setEnabled(true);
-            stopButton.setEnabled(false);
-            setStatus("Anfrage gestoppt");
-        });
+        clearAssistantPlaceholder();
+        setBusy(false, "Anfrage gestoppt");
     }
 
     private void refreshMentions() {
@@ -714,15 +755,126 @@ public final class AiChatViewPart extends ViewPart implements ISaveablePart {
         });
     }
 
-    private void appendText(String text) {
+    private void setBusy(boolean busy, String status) {
         ui(() -> {
-            transcriptText.append(text);
-            transcriptText.setSelection(transcriptText.getText().length());
+            sendButton.setEnabled(!busy);
+            sendButton.setText(busy ? SEND_BUTTON_BUSY_TEXT : SEND_BUTTON_TEXT);
+            sendButton.setToolTipText(busy ? SEND_BUTTON_BUSY_TOOLTIP : SEND_BUTTON_TOOLTIP);
+            stopButton.setEnabled(busy);
+            setBusyIndicatorVisible(busy);
+            statusLabel.setText(status == null ? "" : status);
+            sendButton.getParent().layout(true, true);
         });
+    }
+
+    private void setBusyIndicatorVisible(boolean visible) {
+        if (busyProgressBar == null || busyProgressBar.isDisposed()) {
+            return;
+        }
+        GridData layoutData = (GridData) busyProgressBar.getLayoutData();
+        layoutData.exclude = !visible;
+        busyProgressBar.setVisible(visible);
+        busyProgressBar.getParent().layout(true, true);
     }
 
     private void setStatus(String status) {
         ui(() -> statusLabel.setText(status == null ? "" : status));
+    }
+
+    private void appendPromptExchange(String userPrompt) {
+        ui(() -> {
+            String existing = transcriptText.getText();
+            StringBuilder next = new StringBuilder(existing);
+            if (!existing.isBlank()) {
+                next.append('\n');
+            }
+            next.append("You> ").append(userPrompt);
+            next.append('\n');
+            next.append(ASSISTANT_PROMPT_PREFIX).append(ASSISTANT_PLACEHOLDER);
+            transcriptText.setText(next.toString());
+            assistantContentOffset = next.length() - ASSISTANT_PLACEHOLDER.length();
+            assistantContentLength = ASSISTANT_PLACEHOLDER.length();
+            awaitingFirstAssistantChunk = true;
+            transcriptText.setSelection(transcriptText.getText().length());
+        });
+    }
+
+    private void appendAssistantChunk(String chunk) {
+        if (chunk == null || chunk.isEmpty()) {
+            return;
+        }
+        ui(() -> {
+            if (!hasActiveAssistantInsertion()) {
+                transcriptText.append(chunk);
+                transcriptText.setSelection(transcriptText.getText().length());
+                return;
+            }
+
+            String existing = transcriptText.getText();
+            if (awaitingFirstAssistantChunk) {
+                replaceAssistantContent(existing, chunk);
+                awaitingFirstAssistantChunk = false;
+                assistantContentLength = chunk.length();
+            } else {
+                int insertionOffset = assistantContentOffset + assistantContentLength;
+                if (insertionOffset < 0 || insertionOffset > existing.length()) {
+                    transcriptText.append(chunk);
+                    transcriptText.setSelection(transcriptText.getText().length());
+                    resetAssistantInsertion();
+                    return;
+                }
+                String next = existing.substring(0, insertionOffset) + chunk + existing.substring(insertionOffset);
+                transcriptText.setText(next);
+                assistantContentLength += chunk.length();
+            }
+            transcriptText.setSelection(transcriptText.getText().length());
+        });
+    }
+
+    private void finalizeAssistantResponse(String finalText) {
+        ui(() -> {
+            if (awaitingFirstAssistantChunk && hasActiveAssistantInsertion()) {
+                replaceAssistantContent(transcriptText.getText(), finalText == null ? "" : finalText);
+                awaitingFirstAssistantChunk = false;
+                assistantContentLength = finalText == null ? 0 : finalText.length();
+            }
+            transcriptText.append("\n");
+            transcriptText.setSelection(transcriptText.getText().length());
+            resetAssistantInsertion();
+        });
+    }
+
+    private void clearAssistantPlaceholder() {
+        ui(() -> {
+            if (awaitingFirstAssistantChunk && hasActiveAssistantInsertion()) {
+                replaceAssistantContent(transcriptText.getText(), "");
+            }
+            transcriptText.setSelection(transcriptText.getText().length());
+            resetAssistantInsertion();
+        });
+    }
+
+    private boolean hasActiveAssistantInsertion() {
+        return assistantContentOffset >= 0;
+    }
+
+    private void replaceAssistantContent(String existing, String replacement) {
+        if (!hasActiveAssistantInsertion()) {
+            return;
+        }
+        int contentEndOffset = assistantContentOffset + assistantContentLength;
+        if (assistantContentOffset < 0 || contentEndOffset < assistantContentOffset || contentEndOffset > existing.length()) {
+            resetAssistantInsertion();
+            return;
+        }
+        String next = existing.substring(0, assistantContentOffset) + replacement + existing.substring(contentEndOffset);
+        transcriptText.setText(next);
+    }
+
+    private void resetAssistantInsertion() {
+        awaitingFirstAssistantChunk = false;
+        assistantContentOffset = -1;
+        assistantContentLength = 0;
     }
 
     private void ui(Runnable runnable) {
@@ -746,13 +898,8 @@ public final class AiChatViewPart extends ViewPart implements ISaveablePart {
     private final class ViewChatUiListener implements ChatUiListener {
         @Override
         public void onBeforeSend(String userPrompt) {
-            ui(() -> {
-                sendButton.setEnabled(false);
-                stopButton.setEnabled(true);
-            });
-            appendLine("You> " + userPrompt);
-            appendLine("AI> ");
-            setStatus("Anfrage wird verarbeitet...");
+            appendPromptExchange(userPrompt);
+            setBusy(true, "LLM arbeitet...");
         }
 
         @Override
@@ -762,17 +909,13 @@ public final class AiChatViewPart extends ViewPart implements ISaveablePart {
 
         @Override
         public void onAssistantPartial(String chunk) {
-            appendText(chunk);
+            appendAssistantChunk(chunk);
         }
 
         @Override
         public void onAssistantComplete(String finalText) {
-            appendText("\n");
-            ui(() -> {
-                sendButton.setEnabled(true);
-                stopButton.setEnabled(false);
-            });
-            setStatus("Antwort vollständig");
+            finalizeAssistantResponse(finalText);
+            setBusy(false, "Antwort vollständig");
             activeController = null;
         }
 
@@ -783,12 +926,9 @@ public final class AiChatViewPart extends ViewPart implements ISaveablePart {
 
         @Override
         public void onError(String message, Throwable error) {
+            clearAssistantPlaceholder();
             appendLine("[Fehler] " + message + ": " + (error == null ? "<unknown>" : error.getMessage()));
-            ui(() -> {
-                sendButton.setEnabled(true);
-                stopButton.setEnabled(false);
-            });
-            setStatus("Fehler bei der Anfrage");
+            setBusy(false, "Fehler bei der Anfrage");
             activeController = null;
         }
     }
