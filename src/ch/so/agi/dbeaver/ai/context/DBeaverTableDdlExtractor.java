@@ -12,9 +12,20 @@ import org.jkiss.dbeaver.model.struct.DBStructUtils;
 
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 public final class DBeaverTableDdlExtractor implements TableDdlExtractor {
     private static final Log LOG = Log.getLog(DBeaverTableDdlExtractor.class);
+    private final DdlFacade ddlFacade;
+
+    public DBeaverTableDdlExtractor() {
+        this(new DefaultDdlFacade());
+    }
+
+    DBeaverTableDdlExtractor(DdlFacade ddlFacade) {
+        this.ddlFacade = Objects.requireNonNull(ddlFacade, "ddlFacade");
+    }
 
     @Override
     public String extractDdl(ResolvedTable resolvedTable) throws Exception {
@@ -26,16 +37,17 @@ public final class DBeaverTableDdlExtractor implements TableDdlExtractor {
 
         String ddl = null;
         try {
-            ddl = DBStructUtils.generateObjectDDL(monitor, entity, new LinkedHashMap<>(), true);
+            ddl = ddlFacade.generateObjectDdl(monitor, entity, createDdlOptions(), false);
         } catch (Exception ex) {
-            LOG.debug("generateObjectDDL failed, trying getTableDDL fallback", ex);
+            LOG.debug("Native DDL generation via generateObjectDDL failed, trying getTableDDL fallback", ex);
         }
 
         if (ddl == null || ddl.isBlank()) {
+            LOG.debug("generateObjectDDL returned no DDL, trying getTableDDL fallback");
             try {
-                ddl = DBStructUtils.getTableDDL(monitor, entity, new LinkedHashMap<>(), true);
+                ddl = ddlFacade.getTableDdl(monitor, entity, createDdlOptions(), false);
             } catch (Exception ex) {
-                LOG.debug("getTableDDL failed, using metadata fallback", ex);
+                LOG.debug("Native DDL generation via getTableDDL failed, using metadata fallback", ex);
             }
         }
 
@@ -43,6 +55,7 @@ public final class DBeaverTableDdlExtractor implements TableDdlExtractor {
             return ddl.trim();
         }
 
+        LOG.debug("No native DDL available, using metadata fallback for " + resolvedTable.fullyQualifiedName());
         return fallbackFromMetadata(entity, resolvedTable.fullyQualifiedName(), monitor);
     }
 
@@ -100,6 +113,48 @@ public final class DBeaverTableDdlExtractor implements TableDdlExtractor {
             return DBUtils.getQuotedIdentifier(attr);
         } catch (Exception e) {
             return attr.getName();
+        }
+    }
+
+    private Map<String, Object> createDdlOptions() {
+        return new LinkedHashMap<>();
+    }
+
+    interface DdlFacade {
+        String generateObjectDdl(
+            DBRProgressMonitor monitor,
+            DBSEntity entity,
+            Map<String, Object> options,
+            boolean includeHeader
+        ) throws Exception;
+
+        String getTableDdl(
+            DBRProgressMonitor monitor,
+            DBSEntity entity,
+            Map<String, Object> options,
+            boolean includeHeader
+        ) throws Exception;
+    }
+
+    private static final class DefaultDdlFacade implements DdlFacade {
+        @Override
+        public String generateObjectDdl(
+            DBRProgressMonitor monitor,
+            DBSEntity entity,
+            Map<String, Object> options,
+            boolean includeHeader
+        ) throws Exception {
+            return DBStructUtils.generateObjectDDL(monitor, entity, options, includeHeader);
+        }
+
+        @Override
+        public String getTableDdl(
+            DBRProgressMonitor monitor,
+            DBSEntity entity,
+            Map<String, Object> options,
+            boolean includeHeader
+        ) throws Exception {
+            return DBStructUtils.getTableDDL(monitor, entity, options, includeHeader);
         }
     }
 }
