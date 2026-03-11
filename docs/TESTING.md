@@ -109,19 +109,27 @@ Ergebnis: **BUILD SUCCESSFUL**
    - Erwartung: Die Datei wird aktualisiert, Dirty-Markierung verschwindet.
    - Bei ungebundenem Prompt `Save` ausfuehren.
    - Erwartung: `Save As...` wird geoeffnet und speichert den Prompt als neue Datei.
-   - Prompt A speichern, senden, neuen Prompt B schreiben und erneut `Save` ausfuehren.
-   - Erwartung: Dieselbe Datei enthaelt Prompt A plus einen getrennten `USER MESSAGE`-Block fuer Prompt B.
-   - Prompt B vor dem Senden aendern und nochmals `Save` ausfuehren.
-   - Erwartung: Der letzte `USER MESSAGE`-Block wird ersetzt, nicht verdoppelt.
+   - Prompt A speichern, senden und danach den Editorzustand pruefen.
+   - Erwartung: Das Prompt-Feld ist leer, ohne Dirty-Markierung und wieder ein untitled/ungebundener Draft.
+   - Neuen Prompt B schreiben und `Save` ausfuehren.
+   - Erwartung: `Save As...` wird erneut geoeffnet; die frueher geoeffnete Draft-Datei wird nicht automatisch weiterverwendet.
 
-10. Dirty-Schutz
+10. Nachrichten-Log
+   - Mehrere Prompts senden.
+   - Erwartung: `~/.dbeaver-ai-messages.log` wird angelegt und enthaelt jede gesendete User-Nachricht als eigenen `USER MESSAGE`-Block.
+   - Dieselbe Nachricht zweimal senden.
+   - Erwartung: Beide Nachrichten erscheinen separat im Log, nichts wird ersetzt oder dedupliziert.
+   - Einen Prompt mit `@sql` senden.
+   - Erwartung: Im Log steht der rohe User-Prompt mit `@sql`, nicht der expandierte SQL-Kontext.
+
+11. Dirty-Schutz
    - Einen geladenen oder neuen Prompt aendern, ohne zu speichern.
    - `Open...` oder `Ask AI About Selection` ausloesen.
    - Erwartung: Dialog mit `Save`, `Verwerfen`, `Abbrechen`.
    - Nach erfolgreichem `Send` pruefen.
-   - Erwartung: Das Prompt-Feld ist leer und ohne Dirty-Markierung zurueckgesetzt; bei gebundener Datei bleibt die Dateibindung fuer den naechsten Append erhalten.
+   - Erwartung: Das Prompt-Feld ist leer und ohne Dirty-Markierung zurueckgesetzt; die fruehere Dateibindung ist geloest.
 
-11. Logging-Modi
+12. Logging-Modi
    - Preferences setzen: `LLM Logging = OFF`, Anfrage senden.
    - Erwartung: keine Start/Complete-Infozeilen fuer Request/Response im `Error Log`.
    - Preferences setzen: `LLM Logging = METADATA`, Anfrage senden.
@@ -129,15 +137,15 @@ Ergebnis: **BUILD SUCCESSFUL**
    - Preferences setzen: `LLM Logging = FULL`, Anfrage senden.
    - Erwartung: vollständiger Payload fuer Request/Response im `Error Log` (ggf. in mehreren `part x/y`-Bloecken), sensible Muster maskiert.
 
-12. LangChain HTTP Logging
+13. LangChain HTTP Logging
    - Checkbox `LangChain HTTP Logging (Request/Response)` aktivieren.
    - Erwartung: zusaetzliche LangChain4j-HTTP-Logs je nach Runtime-Logger-Konfiguration; Plugin-eigene Logs bleiben unveraendert.
 
-13. Cache-/Perspektivenfall
+14. Cache-/Perspektivenfall
    - Wenn View/Command fehlt: DBeaver mit `-clean` starten und Perspektive resetten.
    - Erwartung: `AI Chat` ist danach ueber `Show View` und `Find Actions` wieder auffindbar.
 
-14. `@sql`-Injection
+15. `@sql`-Injection
    - Im SQL-Editor eine Query markieren und im AI Chat einen Prompt mit `@sql` senden.
    - Erwartung: Die Anfrage laeuft mit der markierten SQL als zusaetzlichem Prompt-Abschnitt; im sichtbaren Chat bleibt der rohe User-Text mit `@sql`.
    - Ohne markierte Query, aber mit Cursor in einer aktiven Query, erneut `@sql` senden.

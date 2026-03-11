@@ -94,6 +94,7 @@ public final class AiChatViewPart extends ViewPart implements ISaveablePart {
     private final ContextAssembler contextAssembler = new ContextAssembler(new PromptBudgetEstimator());
     private final ContextAwarePromptComposer promptComposer = new ContextAwarePromptComposer();
     private final PromptFileService promptFileService = new PromptFileService();
+    private final MessageLogService messageLogService = new MessageLogService();
     private final PromptDocumentState promptDocumentState = new PromptDocumentState();
     private final SqlPromptInjectionResolver sqlPromptInjectionResolver = new SqlPromptInjectionResolver();
 
@@ -247,6 +248,7 @@ public final class AiChatViewPart extends ViewPart implements ISaveablePart {
             return false;
         }
         String nextText = text == null ? "" : text;
+        promptDocumentState.resetToUntitled(nextText);
         if (!nextText.equals(inputText.getText())) {
             inputText.setText(nextText);
         }
@@ -371,22 +373,8 @@ public final class AiChatViewPart extends ViewPart implements ISaveablePart {
 
         String content = currentPromptText();
         try {
-            if (promptDocumentState.persistenceMode() == PromptPersistenceMode.APPEND_LOG) {
-                String persistedTail;
-                if (promptDocumentState.lastSavedAppendTail() == null) {
-                    persistedTail = promptFileService.appendLogEntry(targetPath, PromptLogEntry.now(content));
-                } else {
-                    persistedTail = promptFileService.replaceLastLogEntryOrAppend(
-                        targetPath,
-                        promptDocumentState.lastSavedAppendTail(),
-                        PromptLogEntry.now(content)
-                    );
-                }
-                promptDocumentState.markSavedLogEntry(targetPath, content, persistedTail);
-            } else {
-                promptFileService.saveDraft(targetPath, content);
-                promptDocumentState.markSavedDraft(targetPath, content);
-            }
+            promptFileService.saveDraft(targetPath, content);
+            promptDocumentState.markSavedDraft(targetPath, content);
             rememberLastPromptPath(targetPath);
             refreshDocumentState();
             setStatus("Prompt gespeichert: " + targetPath.getFileName());
@@ -593,7 +581,8 @@ public final class AiChatViewPart extends ViewPart implements ISaveablePart {
         }
 
         PromptAugmentation promptAugmentation = sqlPromptInjectionResolver.resolve(userPrompt);
-        promptDocumentState.markSent();
+        appendSentMessageToLog(userPrompt);
+        promptDocumentState.resetToUntitled("");
         if (!inputText.getText().isEmpty()) {
             inputText.setText("");
         }
@@ -620,6 +609,16 @@ public final class AiChatViewPart extends ViewPart implements ISaveablePart {
         activeController = controller;
 
         controller.send(settings.systemPrompt(), promptAugmentation, settings.toChatRequestOptions(), new ViewChatUiListener());
+    }
+
+    private void appendSentMessageToLog(String userPrompt) {
+        try {
+            messageLogService.appendUserMessage(userPrompt);
+        } catch (IOException ex) {
+            LOG.warn("Failed to append sent prompt to message log", ex);
+            appendLine("[Warnung] Nachricht konnte nicht ins Log geschrieben werden: "
+                + messageLogService.messageLogPath() + " (" + ex.getMessage() + ")");
+        }
     }
 
     private void stopPrompt() {
