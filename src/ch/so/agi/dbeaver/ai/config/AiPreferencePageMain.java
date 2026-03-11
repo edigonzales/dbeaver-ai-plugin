@@ -29,6 +29,7 @@ public final class AiPreferencePageMain extends PreferencePage implements IWorkb
     private Text mentionCandidateLimitText;
     private Text temperatureText;
     private Combo llmLogModeCombo;
+    private Label sampleRowsHintLabel;
 
     private Button includeDdlButton;
     private Button includeSampleRowsButton;
@@ -90,6 +91,16 @@ public final class AiPreferencePageMain extends PreferencePage implements IWorkb
         sampleRowLimitText = createLabeledText(root, "Sample Row Limit", SWT.BORDER);
         maxReferencedTablesText = createLabeledText(root, "Max Referenced Tables", SWT.BORDER);
         maxColumnsPerSampleText = createLabeledText(root, "Max Columns per Sample", SWT.BORDER);
+
+        sampleRowsHintLabel = new Label(root, SWT.WRAP);
+        sampleRowsHintLabel.setText(
+            "Hinweis: Sample Rows werden derzeit nicht an das Modell gesendet. Diese Felder bleiben nur aus Kompatibilitaetsgruenden sichtbar."
+        );
+        GridData sampleRowsHintGd = new GridData(SWT.FILL, SWT.CENTER, true, false);
+        sampleRowsHintGd.horizontalSpan = 2;
+        sampleRowsHintGd.widthHint = 700;
+        sampleRowsHintLabel.setLayoutData(sampleRowsHintGd);
+
         historySizeText = createLabeledText(root, "Chat History Size", SWT.BORDER);
         maxContextTokensText = createLabeledText(root, "Max Context Tokens", SWT.BORDER);
         mentionProposalLimitText = createLabeledText(root, "Autocomplete Proposal Limit", SWT.BORDER);
@@ -141,18 +152,18 @@ public final class AiPreferencePageMain extends PreferencePage implements IWorkb
             AiSettings.DEFAULT_BASE_URL,
             AiSettings.DEFAULT_MODEL,
             AiSettings.DEFAULT_SYSTEM_PROMPT,
-            5,
-            8,
-            30,
+            AiSettings.DEFAULT_SAMPLE_ROW_LIMIT,
+            AiSettings.DEFAULT_MAX_REFERENCED_TABLES,
+            AiSettings.DEFAULT_MAX_COLUMNS_PER_SAMPLE,
             AiSettings.DEFAULT_INCLUDE_DDL,
             AiSettings.DEFAULT_INCLUDE_SAMPLE_ROWS,
-            12,
-            4_000,
+            AiSettings.DEFAULT_HISTORY_SIZE,
+            AiSettings.DEFAULT_MAX_CONTEXT_TOKENS,
             AiSettings.DEFAULT_MENTION_PROPOSAL_LIMIT,
             AiSettings.DEFAULT_MENTION_CANDIDATE_LIMIT,
             AiSettings.DEFAULT_LLM_LOG_MODE,
             AiSettings.DEFAULT_LANGCHAIN_HTTP_LOGGING,
-            0.0
+            AiSettings.DEFAULT_TEMPERATURE
         ));
         clearTokenButton.setSelection(false);
         apiTokenText.setText("");
@@ -175,7 +186,10 @@ public final class AiPreferencePageMain extends PreferencePage implements IWorkb
         llmLogModeCombo.setText(settings.llmLogMode().name());
 
         includeDdlButton.setSelection(settings.includeDdl());
-        includeSampleRowsButton.setSelection(settings.includeSampleRows());
+        includeSampleRowsButton.setSelection(false);
+        includeSampleRowsButton.setEnabled(false);
+        sampleRowLimitText.setEnabled(false);
+        maxColumnsPerSampleText.setEnabled(false);
         langchainHttpLoggingButton.setSelection(settings.langchainHttpLogging());
     }
 
@@ -184,18 +198,18 @@ public final class AiPreferencePageMain extends PreferencePage implements IWorkb
             safeTrim(baseUrlText.getText(), AiSettings.DEFAULT_BASE_URL),
             safeTrim(modelText.getText(), AiSettings.DEFAULT_MODEL),
             safeTrim(systemPromptText.getText(), AiSettings.DEFAULT_SYSTEM_PROMPT),
-            parseIntOrDefault(sampleRowLimitText.getText(), 5),
-            parseIntOrDefault(maxReferencedTablesText.getText(), 8),
-            parseIntOrDefault(maxColumnsPerSampleText.getText(), 30),
+            parseIntOrDefault(sampleRowLimitText.getText(), AiSettings.DEFAULT_SAMPLE_ROW_LIMIT),
+            parseIntOrDefault(maxReferencedTablesText.getText(), AiSettings.DEFAULT_MAX_REFERENCED_TABLES),
+            parseIntOrDefault(maxColumnsPerSampleText.getText(), AiSettings.DEFAULT_MAX_COLUMNS_PER_SAMPLE),
             includeDdlButton.getSelection(),
-            includeSampleRowsButton.getSelection(),
-            parseIntOrDefault(historySizeText.getText(), 12),
-            parseIntOrDefault(maxContextTokensText.getText(), 4_000),
+            false,
+            parseIntOrDefault(historySizeText.getText(), AiSettings.DEFAULT_HISTORY_SIZE),
+            parseIntOrDefault(maxContextTokensText.getText(), AiSettings.DEFAULT_MAX_CONTEXT_TOKENS),
             parseIntOrDefault(mentionProposalLimitText.getText(), AiSettings.DEFAULT_MENTION_PROPOSAL_LIMIT),
             parseIntOrDefault(mentionCandidateLimitText.getText(), AiSettings.DEFAULT_MENTION_CANDIDATE_LIMIT),
             parseLlmLogMode(llmLogModeCombo.getText()),
             langchainHttpLoggingButton.getSelection(),
-            parseDoubleOrDefault(temperatureText.getText(), 0.0)
+            parseDoubleOrDefault(temperatureText.getText(), AiSettings.DEFAULT_TEMPERATURE)
         );
     }
 

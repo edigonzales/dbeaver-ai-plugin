@@ -14,23 +14,26 @@ public final class AiSettingsService {
     private static final Log LOG = Log.getLog(AiSettingsService.class);
 
     public AiSettings loadSettings() {
-        DBPPreferenceStore store = preferenceStore();
+        return loadSettings(preferenceStore());
+    }
+
+    AiSettings loadSettings(DBPPreferenceStore store) {
         return new AiSettings(
             getPreferenceString(store, AiPreferenceConstants.PREF_BASE_URL, AiSettings.DEFAULT_BASE_URL),
             getPreferenceString(store, AiPreferenceConstants.PREF_MODEL, AiSettings.DEFAULT_MODEL),
             getPreferenceString(store, AiPreferenceConstants.PREF_SYSTEM_PROMPT, AiSettings.DEFAULT_SYSTEM_PROMPT),
-            getPreferenceInt(store, AiPreferenceConstants.PREF_SAMPLE_ROW_LIMIT, 5),
-            getPreferenceInt(store, AiPreferenceConstants.PREF_MAX_REFERENCED_TABLES, 8),
-            getPreferenceInt(store, AiPreferenceConstants.PREF_MAX_COLUMNS_PER_SAMPLE, 30),
+            getPreferenceInt(store, AiPreferenceConstants.PREF_SAMPLE_ROW_LIMIT, AiSettings.DEFAULT_SAMPLE_ROW_LIMIT),
+            getPreferenceInt(store, AiPreferenceConstants.PREF_MAX_REFERENCED_TABLES, AiSettings.DEFAULT_MAX_REFERENCED_TABLES),
+            getPreferenceInt(store, AiPreferenceConstants.PREF_MAX_COLUMNS_PER_SAMPLE, AiSettings.DEFAULT_MAX_COLUMNS_PER_SAMPLE),
             getPreferenceBoolean(store, AiPreferenceConstants.PREF_INCLUDE_DDL, AiSettings.DEFAULT_INCLUDE_DDL),
-            getPreferenceBoolean(store, AiPreferenceConstants.PREF_INCLUDE_SAMPLE_ROWS, AiSettings.DEFAULT_INCLUDE_SAMPLE_ROWS),
-            getPreferenceInt(store, AiPreferenceConstants.PREF_HISTORY_SIZE, 12),
-            getPreferenceInt(store, AiPreferenceConstants.PREF_MAX_CONTEXT_TOKENS, 4_000),
+            false,
+            getPreferenceInt(store, AiPreferenceConstants.PREF_HISTORY_SIZE, AiSettings.DEFAULT_HISTORY_SIZE),
+            getPreferenceInt(store, AiPreferenceConstants.PREF_MAX_CONTEXT_TOKENS, AiSettings.DEFAULT_MAX_CONTEXT_TOKENS),
             getPreferenceInt(store, AiPreferenceConstants.PREF_MENTION_PROPOSAL_LIMIT, AiSettings.DEFAULT_MENTION_PROPOSAL_LIMIT),
             getPreferenceInt(store, AiPreferenceConstants.PREF_MENTION_CANDIDATE_LIMIT, AiSettings.DEFAULT_MENTION_CANDIDATE_LIMIT),
             parseLlmLogMode(getPreferenceString(store, AiPreferenceConstants.PREF_LLM_LOG_MODE, AiSettings.DEFAULT_LLM_LOG_MODE.name())),
             getPreferenceBoolean(store, AiPreferenceConstants.PREF_LANGCHAIN_HTTP_LOGGING, AiSettings.DEFAULT_LANGCHAIN_HTTP_LOGGING),
-            parseDoubleOrDefault(store.getString(AiPreferenceConstants.PREF_TEMPERATURE), 0.0)
+            parseDoubleOrDefault(store.getString(AiPreferenceConstants.PREF_TEMPERATURE), AiSettings.DEFAULT_TEMPERATURE)
         );
     }
 
@@ -56,7 +59,10 @@ public final class AiSettingsService {
     }
 
     public void saveSettings(AiSettings settings) {
-        DBPPreferenceStore store = preferenceStore();
+        saveSettings(preferenceStore(), settings);
+    }
+
+    void saveSettings(DBPPreferenceStore store, AiSettings settings) {
         store.setValue(AiPreferenceConstants.PREF_BASE_URL, settings.baseUrl());
         store.setValue(AiPreferenceConstants.PREF_MODEL, settings.model());
         store.setValue(AiPreferenceConstants.PREF_SYSTEM_PROMPT, settings.systemPrompt());
@@ -66,7 +72,7 @@ public final class AiSettingsService {
         store.setValue(AiPreferenceConstants.PREF_MAX_COLUMNS_PER_SAMPLE, settings.maxColumnsPerSample());
 
         store.setValue(AiPreferenceConstants.PREF_INCLUDE_DDL, settings.includeDdl());
-        store.setValue(AiPreferenceConstants.PREF_INCLUDE_SAMPLE_ROWS, settings.includeSampleRows());
+        store.setValue(AiPreferenceConstants.PREF_INCLUDE_SAMPLE_ROWS, false);
 
         store.setValue(AiPreferenceConstants.PREF_HISTORY_SIZE, settings.historySize());
         store.setValue(AiPreferenceConstants.PREF_MAX_CONTEXT_TOKENS, settings.maxContextTokens());

@@ -17,8 +17,11 @@ Das Plugin `ch.so.agi.dbeaver.ai` ist in 6 Schichten gegliedert:
 
 - `AiChatViewPart`
   - Chat-Transcript
-  - Eingabe, Send/Stop
+  - Eingabe, Send/Stop/Clear Context
   - `#`-Autocomplete
+  - `@sql`-Prompt-Erweiterung aus dem aktiven SQL-Editor
+  - Prompt-Dateiaktionen (`Open...`, `Save`, `Save As...`)
+  - Busy-Indikator
   - Statusausgabe/Warnungen
 - `OpenAiChatViewHandler`
 - `AskWithSelectionHandler`
@@ -30,8 +33,10 @@ Das Plugin `ch.so.agi.dbeaver.ai` ist in 6 Schichten gegliedert:
   - Kontext aufbauen
   - Prompt komponieren
   - Streaming-LLM aufrufen
+  - sichtbare Warnung bei Token-Budget-Trunkierung emittieren
 - `ChatSession`
   - lokale Historie (USER/ASSISTANT)
+  - `clear()` fuer expliziten Kontext-Reset
 
 ## Mentions (`ch.so.agi.dbeaver.ai.mention`)
 
@@ -47,13 +52,16 @@ Mention-Format: `#datasource.schema.table`
 - `DBeaverTableReferenceResolver`
   - Referenz -> DBSEntity/ExecutionContext
 - `DBeaverTableDdlExtractor`
-  - DDL via `DBStructUtils.generateObjectDDL/getTableDDL`
+  - native DDL via `DBStructUtils.generateObjectDDL/getTableDDL` ohne DBeaver-Header
+  - verwirft strukturell leere `CREATE TABLE (...)`-Skeletons
   - Fallback auf metadatenbasiertes `CREATE TABLE ...`
 - `DBeaverSampleRowsCollector`
   - Sample-Abfrage + `setLimit`
 - `ContextEnricher`
-  - DDL/Sample sammeln
+  - DDL und Sample-Query sammeln
+  - Sample-Row-Sammlung bleibt vorhanden, ist produktseitig aber global deaktiviert
   - sensible Felder maskieren
+  - Warnungen fuer degradierte DDL-Fallbacks
 - `ContextAssembler`
   - Prompt-Block erstellen
   - Token-Budget anwenden
@@ -79,8 +87,8 @@ System-Prompt und Limits in Preferences, API-Token im Secret Storage.
 1. User sendet Nachricht in `AiChatViewPart`.
 2. `ChatController` extrahiert Mentions.
 3. Resolver löst Tabellen auf.
-4. DDL + Sample-Rows werden gesammelt.
-5. Kontext wird token-basiert gekürzt.
+4. DDL und Sample-Query werden gesammelt; Sample Rows werden derzeit nicht an das Modell gesendet.
+5. Kontext wird token-basiert gekuerzt; Trunkierung wird im Prompt vermerkt und als Warnung in der UI angezeigt.
 6. Prompt wird strukturiert kombiniert: Nutzeranfrage + Arbeitsauftrag + Tabellenkontext.
 7. `LangChain4jOpenAiClient` streamt Antwort.
 8. UI zeigt Chunks live an, speichert finalen Verlauf.
@@ -88,9 +96,11 @@ System-Prompt und Limits in Preferences, API-Token im Secret Storage.
 ## Prompt Pipeline
 
 1. Mention-Parsing identifiziert `#datasource.schema.table`-Referenzen aus der User-Nachricht.
-2. Kontextaufbau sammelt pro referenzierter Tabelle DDL, Sample-Query und Sample-Rows.
+2. Kontextaufbau sammelt pro referenzierter Tabelle DDL und Sample-Query.
+   - die Sample-Row-Sammlung ist technisch weiter vorhanden, wird aber derzeit nicht in Requests aufgenommen.
    - zusätzlich wird der Datenbanktyp je Datasource ermittelt (Treibername, fallback Dialect).
 3. Budgeting kuerzt den Tabellenkontext bei Bedarf ueber `maxContextTokens`.
+   - die UI zeigt dafuer eine explizite Warnung, und der Prompt-Block enthaelt eine Truncation-Note.
 4. `ContextAwarePromptComposer` baut den finalen User-Prompt in Abschnitten auf:
    - `## Nutzeranfrage`
    - `## Arbeitsauftrag`
@@ -113,7 +123,8 @@ System-Prompt und Limits in Preferences, API-Token im Secret Storage.
 ## Fehlerpfade
 
 - Mention unauflösbar: Warnung im Chat, Request läuft weiter.
-- DDL/Sample-Fehler pro Tabelle: Warnung, Restkontext bleibt nutzbar.
+- DDL-/Kontextfehler pro Tabelle: Warnung, Restkontext bleibt nutzbar.
+- native DDL unbrauchbar oder leer: Fallback auf `getTableDDL`, danach ggf. Metadaten-DDL.
 - API-Token fehlt: Request wird vor dem Senden abgebrochen.
 - LLM-Fehler/Timeout: UI zeigt Fehler, Send ist wieder aktiv.
 

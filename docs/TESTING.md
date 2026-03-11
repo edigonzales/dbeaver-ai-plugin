@@ -2,7 +2,7 @@
 
 ## Ausführung
 
-Letzter verifizierter Lauf am **2026-02-10**:
+Letzter verifizierter Lauf am **2026-03-11**:
 
 ```bash
 ./gradlew clean test
@@ -29,14 +29,15 @@ Ergebnis: **BUILD SUCCESSFUL**
 
 - `ContextEnricherTest`
   - Warnungen bei unauflösbaren Referenzen
-  - DDL + Sample-Kontext
-  - Maskierung sensibler Felder
+  - DDL-Kontext, Maskierung sensibler Felder und degradierte DDL-Warnungen
 - `ContextAssemblerTest`
   - Token-Budget/Trunkierung
   - Prompt-Block-Reihenfolge
 - `SensitiveDataMaskerTest`
   - Regex-basierte Maskierung
 - `DBeaverTableDdlExtractorTest`
+  - native DDL ohne Header
+  - Verwerfen leerer `CREATE TABLE (...)`-Skeletons
   - Fallback-DDL ohne native Table-Instanz
 
 ### Chat/LLM-Orchestrierung
@@ -45,13 +46,20 @@ Ergebnis: **BUILD SUCCESSFUL**
   - Ende-zu-Ende Orchestrierung mit Stub-LLM
   - Persistierung USER/ASSISTANT in Session
   - deterministisches Cancel-Verhalten
+  - sichtbare Token-Budget-Warnung
 - `ContextAwarePromptComposerTest`
   - korrekte Prompt-Komposition
+- `ChatSessionTest`
+  - `clear()` leert Snapshot und Recent-History
 
 ### Config
 
 - `AiSettingsTest`
   - Defaulting/Clamping/Normalisierung
+- `AiSettingsServiceTest`
+  - Defaults aus Preferences
+  - Ignorieren von Legacy-`includeSampleRows=true`
+  - Persistierung des hart deaktivierten Sample-Row-Flags
 - `LlmPayloadLoggerTest`
   - Volltext-Formatierung (SYSTEM/HISTORY/USER/CONTEXT/ASSISTANT)
   - Maskierung sensibler Werte (`authorization`, `apiKey`, `token`)
@@ -74,7 +82,10 @@ Ergebnis: **BUILD SUCCESSFUL**
 
 3. Settings prüfen
    - Preference Page: `ch.so.agi.dbeaver.ai.preferences.main`
-   - Erwartung: Base URL / Model / Prompt / Limits editierbar.
+   - Erwartung: Base URL / Model / Prompt / allgemeine Limits editierbar.
+   - Erwartung: `Sample Rows im Kontext mitsenden` sichtbar, aber deaktiviert und auf `false`.
+   - Erwartung: `Sample Row Limit` und `Max Columns per Sample` sichtbar, aber deaktiviert.
+   - Erwartung: Hinweis sichtbar, dass Sample Rows derzeit nicht an das Modell gesendet werden.
 
 4. Secret-Handling
    - API-Token setzen, DBeaver neu starten.
@@ -86,7 +97,9 @@ Ergebnis: **BUILD SUCCESSFUL**
 
 6. Kontextanreicherung
    - Request mit gültiger Mention senden.
-   - Erwartung: DDL + Sample-Rows werden intern in den Prompt übernommen; bei Fehlern erscheinen Warnungen.
+   - Erwartung: DDL und Sample Query werden intern in den Prompt übernommen; der `Sample Rows`-Abschnitt bleibt leer.
+   - Bei degradierter DDL oder Resolver-/Collector-Fehlern erscheinen Warnungen im Chat.
+   - Wenn `maxContextTokens` kuenstlich klein gesetzt ist, erscheint zusaetzlich eine sichtbare Trunkierungswarnung.
 
 7. Streaming + Stop
    - Längere Anfrage senden, dann `Stop`.

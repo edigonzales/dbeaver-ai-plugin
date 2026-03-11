@@ -35,8 +35,34 @@ class AiSettingsTest {
         assertThat(settings.maxContextTokens()).isEqualTo(100);
         assertThat(settings.mentionProposalLimit()).isEqualTo(1);
         assertThat(settings.mentionCandidateLimit()).isEqualTo(1);
+        assertThat(settings.includeSampleRows()).isFalse();
         assertThat(settings.llmLogMode()).isEqualTo(LlmLogMode.METADATA);
         assertThat(settings.langchainHttpLogging()).isTrue();
         assertThat(settings.temperature()).isEqualTo(2.0);
+    }
+
+    @Test
+    void toChatRequestOptionsKeepsSampleRowControlsDormantWhenFeatureIsDisabled() {
+        AiSettings settings = new AiSettings(
+            "https://example.com",
+            "model",
+            "prompt",
+            42,
+            8,
+            99,
+            true,
+            true,
+            12,
+            4_000,
+            40,
+            100_000,
+            LlmLogMode.METADATA,
+            false,
+            0.0
+        );
+
+        assertThat(settings.toChatRequestOptions().includeSampleRows()).isFalse();
+        assertThat(settings.toChatRequestOptions().sampleRowLimit()).isEqualTo(AiSettings.DEFAULT_SAMPLE_ROW_LIMIT);
+        assertThat(settings.toChatRequestOptions().maxColumnsPerSample()).isEqualTo(AiSettings.DEFAULT_MAX_COLUMNS_PER_SAMPLE);
     }
 }

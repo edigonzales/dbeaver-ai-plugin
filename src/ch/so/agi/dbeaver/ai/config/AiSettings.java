@@ -8,9 +8,15 @@ import java.util.Objects;
 public final class AiSettings {
     public static final String DEFAULT_BASE_URL = "https://api.openai.com/v1";
     public static final String DEFAULT_MODEL = "gpt-4o-mini";
-    public static final String DEFAULT_SYSTEM_PROMPT = "Du bist ein Datenbank-Assistent und hilfst primär beim Entwerfen, Debuggen und Optimieren herausfordernder SQL-Abfragen. Antworte immer auf Deutsch. Wenn du eine SQL-Abfrage lieferst, MUSS sie in einem ```sql```-Codeblock stehen. Zu jeder SQL-Abfrage MUSS eine kurze Erklärung mitgeliefert werden (Zweck, zentrale Join-/Filter-/Aggregationslogik, Annahmen). Nutze bereitgestellten Tabellenkontext (DDL und Sample Rows) vorrangig und nenne fehlende Informationen explizit.";
+    public static final String DEFAULT_SYSTEM_PROMPT = "Du bist ein Datenbank-Assistent und hilfst primaer beim Entwerfen, Debuggen und Optimieren herausfordernder SQL-Abfragen. Antworte immer auf Deutsch. Wenn du eine SQL-Abfrage lieferst, MUSS sie in einem ```sql```-Codeblock stehen. Zu jeder SQL-Abfrage MUSS eine kurze Erklaerung mitgeliefert werden (Zweck, zentrale Join-/Filter-/Aggregationslogik, Annahmen). Nutze bereitgestellten Tabellenkontext, insbesondere DDL, vorrangig und nenne fehlende Informationen explizit.";
+    public static final int DEFAULT_SAMPLE_ROW_LIMIT = 5;
+    public static final int DEFAULT_MAX_REFERENCED_TABLES = 8;
+    public static final int DEFAULT_MAX_COLUMNS_PER_SAMPLE = 30;
+    public static final int DEFAULT_HISTORY_SIZE = 12;
+    public static final int DEFAULT_MAX_CONTEXT_TOKENS = 4_000;
+    public static final double DEFAULT_TEMPERATURE = 0.0;
     public static final boolean DEFAULT_INCLUDE_DDL = true;
-    public static final boolean DEFAULT_INCLUDE_SAMPLE_ROWS = true;
+    public static final boolean DEFAULT_INCLUDE_SAMPLE_ROWS = false;
     public static final int DEFAULT_MENTION_PROPOSAL_LIMIT = 40;
     public static final int DEFAULT_MENTION_CANDIDATE_LIMIT = 100_000;
     public static final LlmLogMode DEFAULT_LLM_LOG_MODE = LlmLogMode.METADATA;
@@ -56,7 +62,7 @@ public final class AiSettings {
         this.maxReferencedTables = Math.max(1, maxReferencedTables);
         this.maxColumnsPerSample = Math.max(1, maxColumnsPerSample);
         this.includeDdl = includeDdl;
-        this.includeSampleRows = includeSampleRows;
+        this.includeSampleRows = normalizeIncludeSampleRows(includeSampleRows);
         this.historySize = Math.max(0, historySize);
         this.maxContextTokens = Math.max(100, maxContextTokens);
         this.mentionProposalLimit = Math.max(1, mentionProposalLimit);
@@ -75,9 +81,13 @@ public final class AiSettings {
 
     private static double clampTemperature(double value) {
         if (Double.isNaN(value)) {
-            return 0.0;
+            return DEFAULT_TEMPERATURE;
         }
         return Math.max(0.0, Math.min(2.0, value));
+    }
+
+    private static boolean normalizeIncludeSampleRows(boolean ignored) {
+        return false;
     }
 
     public String baseUrl() {
@@ -145,10 +155,12 @@ public final class AiSettings {
     }
 
     public ChatRequestOptions toChatRequestOptions() {
+        int effectiveSampleRowLimit = includeSampleRows ? sampleRowLimit : DEFAULT_SAMPLE_ROW_LIMIT;
+        int effectiveMaxColumnsPerSample = includeSampleRows ? maxColumnsPerSample : DEFAULT_MAX_COLUMNS_PER_SAMPLE;
         return new ChatRequestOptions(
             maxReferencedTables,
-            sampleRowLimit,
-            maxColumnsPerSample,
+            effectiveSampleRowLimit,
+            effectiveMaxColumnsPerSample,
             includeDdl,
             includeSampleRows,
             maxContextTokens,

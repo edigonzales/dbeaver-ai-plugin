@@ -1,6 +1,12 @@
 package ch.so.agi.dbeaver.ai.config;
 
+import org.jkiss.dbeaver.model.preferences.DBPPreferenceListener;
+import org.jkiss.dbeaver.model.preferences.DBPPreferenceStore;
 import org.junit.jupiter.api.Test;
+
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -8,57 +14,53 @@ class AiSettingsServiceTest {
 
     @Test
     void loadSettings_returnsDefaultsWhenPreferencesAreEmpty() {
-        // Test that AiSettings constructor handles null/empty/invalid values correctly
-        // This simulates what happens when preferences are not set (fresh install)
-        AiSettings settings = new AiSettings(
-            null, null, null, 0, 0, 0, false, false, 0, 0, 0, 0, null, false, Double.NaN
-        );
+        InMemoryPreferenceStore store = new InMemoryPreferenceStore();
+        AiSettingsService service = new AiSettingsService();
+        AiSettings settings = service.loadSettings(store);
 
         assertThat(settings.baseUrl()).isEqualTo(AiSettings.DEFAULT_BASE_URL);
         assertThat(settings.model()).isEqualTo(AiSettings.DEFAULT_MODEL);
         assertThat(settings.systemPrompt()).isEqualTo(AiSettings.DEFAULT_SYSTEM_PROMPT);
-        assertThat(settings.sampleRowLimit()).isEqualTo(1); // min clamp
-        assertThat(settings.maxReferencedTables()).isEqualTo(1); // min clamp
-        assertThat(settings.maxColumnsPerSample()).isEqualTo(1); // min clamp
-        assertThat(settings.includeDdl()).isFalse();
+        assertThat(settings.sampleRowLimit()).isEqualTo(AiSettings.DEFAULT_SAMPLE_ROW_LIMIT);
+        assertThat(settings.maxReferencedTables()).isEqualTo(AiSettings.DEFAULT_MAX_REFERENCED_TABLES);
+        assertThat(settings.maxColumnsPerSample()).isEqualTo(AiSettings.DEFAULT_MAX_COLUMNS_PER_SAMPLE);
+        assertThat(settings.includeDdl()).isEqualTo(AiSettings.DEFAULT_INCLUDE_DDL);
         assertThat(settings.includeSampleRows()).isFalse();
-        assertThat(settings.historySize()).isEqualTo(0);
-        assertThat(settings.maxContextTokens()).isEqualTo(100); // min clamp
-        assertThat(settings.mentionProposalLimit()).isEqualTo(1); // min clamp
-        assertThat(settings.mentionCandidateLimit()).isEqualTo(1); // min clamp
-        assertThat(settings.llmLogMode()).isEqualTo(LlmLogMode.METADATA);
-        assertThat(settings.langchainHttpLogging()).isFalse();
-        assertThat(settings.temperature()).isEqualTo(0.0); // NaN clamp
+        assertThat(settings.historySize()).isEqualTo(AiSettings.DEFAULT_HISTORY_SIZE);
+        assertThat(settings.maxContextTokens()).isEqualTo(AiSettings.DEFAULT_MAX_CONTEXT_TOKENS);
+        assertThat(settings.mentionProposalLimit()).isEqualTo(AiSettings.DEFAULT_MENTION_PROPOSAL_LIMIT);
+        assertThat(settings.mentionCandidateLimit()).isEqualTo(AiSettings.DEFAULT_MENTION_CANDIDATE_LIMIT);
+        assertThat(settings.llmLogMode()).isEqualTo(AiSettings.DEFAULT_LLM_LOG_MODE);
+        assertThat(settings.langchainHttpLogging()).isEqualTo(AiSettings.DEFAULT_LANGCHAIN_HTTP_LOGGING);
+        assertThat(settings.temperature()).isEqualTo(AiSettings.DEFAULT_TEMPERATURE);
     }
 
     @Test
-    void loadSettings_usesDefaultsForEmptyStringValues() {
-        // Test that empty string values are handled correctly
-        AiSettings settings = new AiSettings(
-            "", "", "", 5, 8, 30, true, true, 12, 4000, 40, 100_000, LlmLogMode.METADATA, false, 0.0
-        );
+    void loadSettings_ignoresLegacyStoredIncludeSampleRowsFlag() {
+        InMemoryPreferenceStore store = new InMemoryPreferenceStore();
+        store.setValue(AiPreferenceConstants.PREF_INCLUDE_SAMPLE_ROWS, true);
+        store.setValue(AiPreferenceConstants.PREF_INCLUDE_DDL, true);
+        store.setValue(AiPreferenceConstants.PREF_SAMPLE_ROW_LIMIT, 11);
 
-        assertThat(settings.baseUrl()).isEqualTo(AiSettings.DEFAULT_BASE_URL);
-        assertThat(settings.model()).isEqualTo(AiSettings.DEFAULT_MODEL);
-        assertThat(settings.systemPrompt()).isEqualTo(AiSettings.DEFAULT_SYSTEM_PROMPT);
-        assertThat(settings.mentionCandidateLimit()).isEqualTo(100_000);
+        AiSettings settings = new AiSettingsService().loadSettings(store);
+
+        assertThat(settings.includeSampleRows()).isFalse();
+        assertThat(settings.includeDdl()).isTrue();
+        assertThat(settings.sampleRowLimit()).isEqualTo(11);
     }
 
     @Test
-    void loadSettings_usesProvidedValuesWhenSet() {
-        String customBaseUrl = "https://custom.api.example.com/v1";
-        String customModel = "gpt-4-turbo";
-        String customPrompt = "Custom system prompt";
-
+    void saveSettings_persistsFalseForDisabledSampleRowsFlag() {
+        InMemoryPreferenceStore store = new InMemoryPreferenceStore();
         AiSettings settings = new AiSettings(
-            customBaseUrl,
-            customModel,
-            customPrompt,
+            "https://custom.api.example.com/v1",
+            "gpt-4-turbo",
+            "Custom system prompt",
             10,
             5,
             20,
             false,
-            false,
+            true,
             20,
             8000,
             50,
@@ -67,6 +69,37 @@ class AiSettingsServiceTest {
             true,
             1.5
         );
+        AiSettingsService service = new AiSettingsService();
+
+        service.saveSettings(store, settings);
+
+        assertThat(store.getBoolean(AiPreferenceConstants.PREF_INCLUDE_SAMPLE_ROWS)).isFalse();
+        assertThat(store.saved).isTrue();
+    }
+
+    @Test
+    void loadSettings_usesProvidedValuesWhenSet() {
+        InMemoryPreferenceStore store = new InMemoryPreferenceStore();
+        String customBaseUrl = "https://custom.api.example.com/v1";
+        String customModel = "gpt-4-turbo";
+        String customPrompt = "Custom system prompt";
+        store.setValue(AiPreferenceConstants.PREF_BASE_URL, customBaseUrl);
+        store.setValue(AiPreferenceConstants.PREF_MODEL, customModel);
+        store.setValue(AiPreferenceConstants.PREF_SYSTEM_PROMPT, customPrompt);
+        store.setValue(AiPreferenceConstants.PREF_SAMPLE_ROW_LIMIT, 10);
+        store.setValue(AiPreferenceConstants.PREF_MAX_REFERENCED_TABLES, 5);
+        store.setValue(AiPreferenceConstants.PREF_MAX_COLUMNS_PER_SAMPLE, 20);
+        store.setValue(AiPreferenceConstants.PREF_INCLUDE_DDL, false);
+        store.setValue(AiPreferenceConstants.PREF_INCLUDE_SAMPLE_ROWS, true);
+        store.setValue(AiPreferenceConstants.PREF_HISTORY_SIZE, 20);
+        store.setValue(AiPreferenceConstants.PREF_MAX_CONTEXT_TOKENS, 8000);
+        store.setValue(AiPreferenceConstants.PREF_MENTION_PROPOSAL_LIMIT, 50);
+        store.setValue(AiPreferenceConstants.PREF_MENTION_CANDIDATE_LIMIT, 60);
+        store.setValue(AiPreferenceConstants.PREF_LLM_LOG_MODE, LlmLogMode.FULL.name());
+        store.setValue(AiPreferenceConstants.PREF_LANGCHAIN_HTTP_LOGGING, true);
+        store.setValue(AiPreferenceConstants.PREF_TEMPERATURE, "1.5");
+
+        AiSettings settings = new AiSettingsService().loadSettings(store);
 
         assertThat(settings.baseUrl()).isEqualTo(customBaseUrl);
         assertThat(settings.model()).isEqualTo(customModel);
@@ -85,36 +118,178 @@ class AiSettingsServiceTest {
         assertThat(settings.temperature()).isEqualTo(1.5);
     }
 
-    @Test
-    void getPreferenceInt_returnsDefaultWhenValueIsZero() {
-        // This test documents the behavior of getPreferenceInt helper method
-        // When preferences are not set, getInt() returns 0, so we use the default
-        // The actual helper method is tested indirectly through AiSettings constructor
-        AiSettings settingsWithZeroValues = new AiSettings(
-            "https://example.com", "model", "prompt",
-            0, 0, 0, true, true, 0, 0, 0, 0, LlmLogMode.OFF, false, 0.0
-        );
+    private static final class InMemoryPreferenceStore implements DBPPreferenceStore {
+        private final Map<String, Object> values = new HashMap<>();
+        private final Map<String, Object> defaults = new HashMap<>();
+        private boolean saved;
 
-        // Values of 0 should be clamped to minimum of 1 (per AiSettings constructor logic)
-        assertThat(settingsWithZeroValues.sampleRowLimit()).isEqualTo(1);
-        assertThat(settingsWithZeroValues.maxReferencedTables()).isEqualTo(1);
-        assertThat(settingsWithZeroValues.maxColumnsPerSample()).isEqualTo(1);
-        assertThat(settingsWithZeroValues.mentionProposalLimit()).isEqualTo(1);
-        assertThat(settingsWithZeroValues.mentionCandidateLimit()).isEqualTo(1);
-    }
+        @Override
+        public boolean contains(String name) {
+            return values.containsKey(name) || defaults.containsKey(name);
+        }
 
-    @Test
-    void getPreferenceBoolean_returnsDefaultWhenValueIsNull() {
-        // Test boolean handling - null string should result in default behavior
-        // The AiSettings constructor doesn't have fallback for booleans,
-        // so this tests that the service layer handles it correctly
-        AiSettings settings = new AiSettings(
-            "https://example.com", "model", "prompt",
-            5, 8, 30, true, true, 12, 4000, 40, 100_000, LlmLogMode.METADATA, false, 0.0
-        );
+        @Override
+        public boolean getBoolean(String name) {
+            Object value = values.get(name);
+            return value instanceof Boolean bool ? bool : Boolean.parseBoolean(getString(name));
+        }
 
-        assertThat(settings.includeDdl()).isTrue();
-        assertThat(settings.includeSampleRows()).isTrue();
-        assertThat(settings.langchainHttpLogging()).isFalse();
+        @Override
+        public double getDouble(String name) {
+            Object value = values.get(name);
+            return value instanceof Number number ? number.doubleValue() : 0.0;
+        }
+
+        @Override
+        public float getFloat(String name) {
+            Object value = values.get(name);
+            return value instanceof Number number ? number.floatValue() : 0f;
+        }
+
+        @Override
+        public int getInt(String name) {
+            Object value = values.get(name);
+            return value instanceof Number number ? number.intValue() : 0;
+        }
+
+        @Override
+        public long getLong(String name) {
+            Object value = values.get(name);
+            return value instanceof Number number ? number.longValue() : 0L;
+        }
+
+        @Override
+        public String getString(String name) {
+            Object value = values.get(name);
+            return value == null ? null : value.toString();
+        }
+
+        @Override
+        public boolean getDefaultBoolean(String name) {
+            Object value = defaults.get(name);
+            return value instanceof Boolean bool && bool;
+        }
+
+        @Override
+        public double getDefaultDouble(String name) {
+            Object value = defaults.get(name);
+            return value instanceof Number number ? number.doubleValue() : 0.0;
+        }
+
+        @Override
+        public float getDefaultFloat(String name) {
+            Object value = defaults.get(name);
+            return value instanceof Number number ? number.floatValue() : 0f;
+        }
+
+        @Override
+        public int getDefaultInt(String name) {
+            Object value = defaults.get(name);
+            return value instanceof Number number ? number.intValue() : 0;
+        }
+
+        @Override
+        public long getDefaultLong(String name) {
+            Object value = defaults.get(name);
+            return value instanceof Number number ? number.longValue() : 0L;
+        }
+
+        @Override
+        public String getDefaultString(String name) {
+            Object value = defaults.get(name);
+            return value == null ? null : value.toString();
+        }
+
+        @Override
+        public boolean isDefault(String name) {
+            return !values.containsKey(name) && defaults.containsKey(name);
+        }
+
+        @Override
+        public boolean needsSaving() {
+            return saved;
+        }
+
+        @Override
+        public void setDefault(String name, double value) {
+            defaults.put(name, value);
+        }
+
+        @Override
+        public void setDefault(String name, float value) {
+            defaults.put(name, value);
+        }
+
+        @Override
+        public void setDefault(String name, int value) {
+            defaults.put(name, value);
+        }
+
+        @Override
+        public void setDefault(String name, long value) {
+            defaults.put(name, value);
+        }
+
+        @Override
+        public void setDefault(String name, String defaultObject) {
+            defaults.put(name, defaultObject);
+        }
+
+        @Override
+        public void setDefault(String name, boolean value) {
+            defaults.put(name, value);
+        }
+
+        @Override
+        public void setToDefault(String name) {
+            values.remove(name);
+        }
+
+        @Override
+        public void setValue(String name, double value) {
+            values.put(name, value);
+        }
+
+        @Override
+        public void setValue(String name, float value) {
+            values.put(name, value);
+        }
+
+        @Override
+        public void setValue(String name, int value) {
+            values.put(name, value);
+        }
+
+        @Override
+        public void setValue(String name, long value) {
+            values.put(name, value);
+        }
+
+        @Override
+        public void setValue(String name, String value) {
+            values.put(name, value);
+        }
+
+        @Override
+        public void setValue(String name, boolean value) {
+            values.put(name, value);
+        }
+
+        @Override
+        public void addPropertyChangeListener(DBPPreferenceListener listener) {
+        }
+
+        @Override
+        public void removePropertyChangeListener(DBPPreferenceListener listener) {
+        }
+
+        @Override
+        public void firePropertyChangeEvent(String name, Object oldValue, Object newValue) {
+        }
+
+        @Override
+        public void save() throws IOException {
+            saved = true;
+        }
     }
 }

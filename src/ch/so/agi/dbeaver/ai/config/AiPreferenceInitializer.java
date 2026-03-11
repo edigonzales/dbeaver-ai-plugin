@@ -17,18 +17,18 @@ public final class AiPreferenceInitializer extends AbstractPreferenceInitializer
             store.setDefault(AiPreferenceConstants.PREF_MODEL, AiSettings.DEFAULT_MODEL);
             store.setDefault(AiPreferenceConstants.PREF_SYSTEM_PROMPT, AiSettings.DEFAULT_SYSTEM_PROMPT);
 
-            store.setDefault(AiPreferenceConstants.PREF_SAMPLE_ROW_LIMIT, 5);
-            store.setDefault(AiPreferenceConstants.PREF_MAX_REFERENCED_TABLES, 8);
-            store.setDefault(AiPreferenceConstants.PREF_MAX_COLUMNS_PER_SAMPLE, 30);
+            store.setDefault(AiPreferenceConstants.PREF_SAMPLE_ROW_LIMIT, AiSettings.DEFAULT_SAMPLE_ROW_LIMIT);
+            store.setDefault(AiPreferenceConstants.PREF_MAX_REFERENCED_TABLES, AiSettings.DEFAULT_MAX_REFERENCED_TABLES);
+            store.setDefault(AiPreferenceConstants.PREF_MAX_COLUMNS_PER_SAMPLE, AiSettings.DEFAULT_MAX_COLUMNS_PER_SAMPLE);
 
             store.setDefault(AiPreferenceConstants.PREF_INCLUDE_DDL, AiSettings.DEFAULT_INCLUDE_DDL);
             store.setDefault(AiPreferenceConstants.PREF_INCLUDE_SAMPLE_ROWS, AiSettings.DEFAULT_INCLUDE_SAMPLE_ROWS);
 
-            store.setDefault(AiPreferenceConstants.PREF_HISTORY_SIZE, 12);
-            store.setDefault(AiPreferenceConstants.PREF_MAX_CONTEXT_TOKENS, 4_000);
+            store.setDefault(AiPreferenceConstants.PREF_HISTORY_SIZE, AiSettings.DEFAULT_HISTORY_SIZE);
+            store.setDefault(AiPreferenceConstants.PREF_MAX_CONTEXT_TOKENS, AiSettings.DEFAULT_MAX_CONTEXT_TOKENS);
             store.setDefault(AiPreferenceConstants.PREF_MENTION_PROPOSAL_LIMIT, AiSettings.DEFAULT_MENTION_PROPOSAL_LIMIT);
             store.setDefault(AiPreferenceConstants.PREF_MENTION_CANDIDATE_LIMIT, AiSettings.DEFAULT_MENTION_CANDIDATE_LIMIT);
-            store.setDefault(AiPreferenceConstants.PREF_TEMPERATURE, 0.0);
+            store.setDefault(AiPreferenceConstants.PREF_TEMPERATURE, AiSettings.DEFAULT_TEMPERATURE);
             store.setDefault(AiPreferenceConstants.PREF_LLM_LOG_MODE, AiSettings.DEFAULT_LLM_LOG_MODE.name());
             store.setDefault(AiPreferenceConstants.PREF_LANGCHAIN_HTTP_LOGGING, AiSettings.DEFAULT_LANGCHAIN_HTTP_LOGGING);
             store.setDefault(AiPreferenceConstants.PREF_CHAT_SPLIT_WEIGHTS, "70,30");
