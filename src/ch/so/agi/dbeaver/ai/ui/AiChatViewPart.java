@@ -76,11 +76,13 @@ public final class AiChatViewPart extends ViewPart implements ISaveablePart {
     private static final String SEND_BUTTON_BUSY_TEXT = "Working...";
     private static final String SEND_BUTTON_TOOLTIP = "Send prompt";
     private static final String SEND_BUTTON_BUSY_TOOLTIP = "LLM arbeitet...";
+    private static final String INITIAL_TRANSCRIPT_TEXT =
+        "AI Chat bereit. Verwende #datasource.schema.table fuer Tabellenkontext oder @sql fuer die aktive Query.";
     private static final String ASSISTANT_PROMPT_PREFIX = "AI> ";
     private static final String ASSISTANT_PLACEHOLDER = "...";
 
     private final AiSettingsService settingsService = new AiSettingsService();
-    private final ChatSession chatSession = new ChatSession();
+    private ChatSession chatSession = new ChatSession();
     private final MentionParser mentionParser = new MentionParser();
     private final MentionTriggerDetector mentionTriggerDetector = new MentionTriggerDetector();
     private final DBeaverMentionCatalog mentionCatalog = new DBeaverMentionCatalog();
@@ -164,7 +166,7 @@ public final class AiChatViewPart extends ViewPart implements ISaveablePart {
         inputText.addModifyListener(e -> refreshDocumentState());
 
         Composite buttonRow = new Composite(promptArea, SWT.NONE);
-        buttonRow.setLayout(new GridLayout(3, false));
+        buttonRow.setLayout(new GridLayout(4, false));
         buttonRow.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, true, false));
 
         sendButton = new Button(buttonRow, SWT.PUSH);
@@ -174,6 +176,9 @@ public final class AiChatViewPart extends ViewPart implements ISaveablePart {
         stopButton = new Button(buttonRow, SWT.PUSH);
         stopButton.setText("Stop");
         stopButton.setEnabled(false);
+
+        Button clearContextButton = new Button(buttonRow, SWT.PUSH);
+        clearContextButton.setText("Clear Context");
 
         Button refreshMentionsButton = new Button(buttonRow, SWT.PUSH);
         refreshMentionsButton.setText("Refresh #");
@@ -205,6 +210,7 @@ public final class AiChatViewPart extends ViewPart implements ISaveablePart {
 
         sendButton.addListener(SWT.Selection, e -> sendPrompt());
         stopButton.addListener(SWT.Selection, e -> stopPrompt());
+        clearContextButton.addListener(SWT.Selection, e -> clearContext());
         refreshMentionsButton.addListener(SWT.Selection, e -> refreshMentions());
 
         inputText.addListener(SWT.KeyDown, e -> {
@@ -216,7 +222,7 @@ public final class AiChatViewPart extends ViewPart implements ISaveablePart {
 
         promptDocumentState.resetToUntitled("");
         refreshDocumentState();
-        appendLine("AI Chat bereit. Verwende #datasource.schema.table fuer Tabellenkontext oder @sql fuer die aktive Query.");
+        resetTranscriptToInitialState();
     }
 
     @Override
@@ -608,7 +614,7 @@ public final class AiChatViewPart extends ViewPart implements ISaveablePart {
         );
         activeController = controller;
 
-        controller.send(settings.systemPrompt(), promptAugmentation, settings.toChatRequestOptions(), new ViewChatUiListener());
+        controller.send(settings.systemPrompt(), promptAugmentation, settings.toChatRequestOptions(), new ViewChatUiListener(controller));
     }
 
     private void appendSentMessageToLog(String userPrompt) {
@@ -629,6 +635,14 @@ public final class AiChatViewPart extends ViewPart implements ISaveablePart {
         activeController = null;
         clearAssistantPlaceholder();
         setBusy(false, "Anfrage gestoppt");
+    }
+
+    private void clearContext() {
+        stopPrompt();
+        chatSession.clear();
+        chatSession = new ChatSession();
+        resetTranscriptToInitialState();
+        setStatus("Kontext gelöscht");
     }
 
     private void refreshMentions() {
@@ -754,8 +768,35 @@ public final class AiChatViewPart extends ViewPart implements ISaveablePart {
         });
     }
 
+    private void appendLine(ChatController controller, String text) {
+        ui(() -> {
+            if (!isActiveController(controller)) {
+                return;
+            }
+            String existing = transcriptText.getText();
+            String next = existing.isBlank() ? text : existing + "\n" + text;
+            transcriptText.setText(next);
+            transcriptText.setSelection(transcriptText.getText().length());
+        });
+    }
+
     private void setBusy(boolean busy, String status) {
         ui(() -> {
+            sendButton.setEnabled(!busy);
+            sendButton.setText(busy ? SEND_BUTTON_BUSY_TEXT : SEND_BUTTON_TEXT);
+            sendButton.setToolTipText(busy ? SEND_BUTTON_BUSY_TOOLTIP : SEND_BUTTON_TOOLTIP);
+            stopButton.setEnabled(busy);
+            setBusyIndicatorVisible(busy);
+            statusLabel.setText(status == null ? "" : status);
+            sendButton.getParent().layout(true, true);
+        });
+    }
+
+    private void setBusy(ChatController controller, boolean busy, String status) {
+        ui(() -> {
+            if (!isActiveController(controller)) {
+                return;
+            }
             sendButton.setEnabled(!busy);
             sendButton.setText(busy ? SEND_BUTTON_BUSY_TEXT : SEND_BUTTON_TEXT);
             sendButton.setToolTipText(busy ? SEND_BUTTON_BUSY_TOOLTIP : SEND_BUTTON_TOOLTIP);
@@ -780,6 +821,15 @@ public final class AiChatViewPart extends ViewPart implements ISaveablePart {
         ui(() -> statusLabel.setText(status == null ? "" : status));
     }
 
+    private void setStatus(ChatController controller, String status) {
+        ui(() -> {
+            if (!isActiveController(controller)) {
+                return;
+            }
+            statusLabel.setText(status == null ? "" : status);
+        });
+    }
+
     private void appendPromptExchange(String userPrompt) {
         ui(() -> {
             String existing = transcriptText.getText();
@@ -798,11 +848,14 @@ public final class AiChatViewPart extends ViewPart implements ISaveablePart {
         });
     }
 
-    private void appendAssistantChunk(String chunk) {
+    private void appendAssistantChunk(ChatController controller, String chunk) {
         if (chunk == null || chunk.isEmpty()) {
             return;
         }
         ui(() -> {
+            if (!isActiveController(controller)) {
+                return;
+            }
             if (!hasActiveAssistantInsertion()) {
                 transcriptText.append(chunk);
                 transcriptText.setSelection(transcriptText.getText().length());
@@ -830,8 +883,11 @@ public final class AiChatViewPart extends ViewPart implements ISaveablePart {
         });
     }
 
-    private void finalizeAssistantResponse(String finalText) {
+    private void finalizeAssistantResponse(ChatController controller, String finalText) {
         ui(() -> {
+            if (!isActiveController(controller)) {
+                return;
+            }
             if (awaitingFirstAssistantChunk && hasActiveAssistantInsertion()) {
                 replaceAssistantContent(transcriptText.getText(), finalText == null ? "" : finalText);
                 awaitingFirstAssistantChunk = false;
@@ -855,6 +911,18 @@ public final class AiChatViewPart extends ViewPart implements ISaveablePart {
 
     private boolean hasActiveAssistantInsertion() {
         return assistantContentOffset >= 0;
+    }
+
+    private boolean isActiveController(ChatController controller) {
+        return controller != null && controller == activeController;
+    }
+
+    private void resetTranscriptToInitialState() {
+        ui(() -> {
+            transcriptText.setText(INITIAL_TRANSCRIPT_TEXT);
+            transcriptText.setSelection(transcriptText.getText().length());
+            resetAssistantInsertion();
+        });
     }
 
     private void replaceAssistantContent(String existing, String replacement) {
@@ -895,40 +963,56 @@ public final class AiChatViewPart extends ViewPart implements ISaveablePart {
     }
 
     private final class ViewChatUiListener implements ChatUiListener {
+        private final ChatController controller;
+
+        private ViewChatUiListener(ChatController controller) {
+            this.controller = controller;
+        }
+
         @Override
         public void onBeforeSend(String userPrompt) {
             appendPromptExchange(userPrompt);
-            setBusy(true, "LLM arbeitet...");
+            setBusy(controller, true, "LLM arbeitet...");
         }
 
         @Override
         public void onContextBuilt(ContextBundle contextBundle, String promptBlock) {
-            setStatus("Kontext aufgebaut: " + contextBundle.tableContexts().size() + " Tabelle(n)");
+            setStatus(controller, "Kontext aufgebaut: " + contextBundle.tableContexts().size() + " Tabelle(n)");
         }
 
         @Override
         public void onAssistantPartial(String chunk) {
-            appendAssistantChunk(chunk);
+            appendAssistantChunk(controller, chunk);
         }
 
         @Override
         public void onAssistantComplete(String finalText) {
-            finalizeAssistantResponse(finalText);
-            setBusy(false, "Antwort vollständig");
-            activeController = null;
+            ui(() -> {
+                if (!isActiveController(controller)) {
+                    return;
+                }
+                finalizeAssistantResponse(controller, finalText);
+                activeController = null;
+                setBusy(false, "Antwort vollständig");
+            });
         }
 
         @Override
         public void onWarning(String warning) {
-            appendLine("[Warnung] " + warning);
+            appendLine(controller, "[Warnung] " + warning);
         }
 
         @Override
         public void onError(String message, Throwable error) {
-            clearAssistantPlaceholder();
-            appendLine("[Fehler] " + message + ": " + (error == null ? "<unknown>" : error.getMessage()));
-            setBusy(false, "Fehler bei der Anfrage");
-            activeController = null;
+            ui(() -> {
+                if (!isActiveController(controller)) {
+                    return;
+                }
+                clearAssistantPlaceholder();
+                appendLine("[Fehler] " + message + ": " + (error == null ? "<unknown>" : error.getMessage()));
+                activeController = null;
+                setBusy(false, "Fehler bei der Anfrage");
+            });
         }
     }
 }

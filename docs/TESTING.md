@@ -95,6 +95,10 @@ Ergebnis: **BUILD SUCCESSFUL**
    - Erwartung: Ein sichtbarer Busy-Strip erscheint, `Send` zeigt `Working...` und im Transcript steht direkt `AI> ...`.
    - Sobald die ersten Tokens eintreffen oder der Run beendet/gestoppt wird, erneut prüfen.
    - Erwartung: Der Platzhalter wird durch die echte Antwort ersetzt bzw. bei Fehler/Stop entfernt; der Busy-Strip verschwindet.
+   - Nach einigen Chat-Turns `Clear Context` klicken.
+   - Erwartung: Der sichtbare Transcript wird auf die initiale Hinweiszeile zurückgesetzt, das Prompt-Feld bleibt unverändert und Folgeanfragen enthalten keine alte Chat-History mehr.
+   - Während eines laufenden Streams `Clear Context` klicken.
+   - Erwartung: Der Stream stoppt, der Transcript bleibt geleert und es erscheinen keine verspäteten Chunks der abgebrochenen Antwort mehr.
 
 8. Prompt-Editor / Splitter
    - Chat-View vertikal aufziehen und den Trenner zwischen Transcript und Prompt verschieben.

@@ -29,6 +29,10 @@ public final class ChatSession {
         return msg;
     }
 
+    public synchronized void clear() {
+        messages.clear();
+    }
+
     public synchronized List<ChatMessage> snapshot() {
         return Collections.unmodifiableList(new ArrayList<>(messages));
     }
