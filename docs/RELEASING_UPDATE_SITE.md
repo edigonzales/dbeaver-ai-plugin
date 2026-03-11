@@ -1,6 +1,6 @@
 # Releasing / Update Site
 
-Diese Anleitung beschreibt die manuelle Erzeugung der gemeinsamen p2-Update-Site fuer:
+Diese Anleitung beschreibt die manuelle Erzeugung der gemeinsamen p2-Update-Site für:
 
 - `ch.so.agi.dbeaver.ili2pg.feature`
 - `ch.so.agi.dbeaver.ai.feature`
@@ -15,8 +15,8 @@ Die fertigen Artefakte (`content.jar`, `artifacts.jar`, `features/`, `plugins/`)
 2. Kategoriendefinition erweitert:
    - Datei: `/Users/stefan/sources/dbeaver-ilitools-feature/category.xml`
    - Kategorien:
-     - `interlis` fuer `ili2pg`
-     - `ai` fuer `AI`
+     - `interlis` für `ili2pg`
+     - `ai` für `AI`
 
 ## Release-Schritte
 
@@ -27,9 +27,9 @@ Die fertigen Artefakte (`content.jar`, `artifacts.jar`, `features/`, `plugins/`)
 2. Leeres Staging-Verzeichnis verwenden:
    - `/Users/stefan/sources/dbeaver-release-staging/update-input`
 3. In Eclipse beide Features in dasselbe Staging-Verzeichnis exportieren:
-   - `Deployable Features` fuer `ch.so.agi.dbeaver.ili2pg.feature`
-   - `Deployable Features` fuer `ch.so.agi.dbeaver.ai.feature`
-4. Staging-Inhalt pruefen:
+   - `Deployable Features` für `ch.so.agi.dbeaver.ili2pg.feature`
+   - `Deployable Features` für `ch.so.agi.dbeaver.ai.feature`
+4. Staging-Inhalt prüfen:
    - `features/ch.so.agi.dbeaver.ili2pg.feature_<version>.jar`
    - `plugins/ch.so.agi.dbeaver.ili2pg_<version>.jar`
    - `features/ch.so.agi.dbeaver.ai.feature_<version>.jar`
@@ -60,7 +60,7 @@ Die fertigen Artefakte (`content.jar`, `artifacts.jar`, `features/`, `plugins/`)
 
 7. Ergebnis aus `/tmp/dbeaver-updatesite/` manuell nach `https://dbeaver.sogeo.services/updates/` hochladen.
 
-## Optional: Ablauf ueber Hilfsskript
+## Optional: Ablauf über Hilfsskript
 
 Statt der beiden Publisher-Kommandos kann das Skript im Plugin-Repo verwendet werden:
 
@@ -85,11 +85,11 @@ Alternative Pfade:
 
 ## Abnahmechecks
 
-1. `content.jar` enthaelt:
+1. `content.jar` enthält:
    - `ch.so.agi.dbeaver.ili2pg`
    - `ch.so.agi.dbeaver.ai`
    - beide `*.feature.feature.group`
-2. `artifacts.jar` enthaelt 4 Kernartefakte:
+2. `artifacts.jar` enthält 4 Kernartefakte:
    - 2 Plugins
    - 2 Features
 3. In DBeaver erscheinen auf der Site:

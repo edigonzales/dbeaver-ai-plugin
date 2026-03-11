@@ -36,7 +36,7 @@ Das Plugin `ch.so.agi.dbeaver.ai` ist in 6 Schichten gegliedert:
   - sichtbare Warnung bei Token-Budget-Trunkierung emittieren
 - `ChatSession`
   - lokale Historie (USER/ASSISTANT)
-  - `clear()` fuer expliziten Kontext-Reset
+  - `clear()` für expliziten Kontext-Reset
 
 ## Mentions (`ch.so.agi.dbeaver.ai.mention`)
 
@@ -61,7 +61,7 @@ Mention-Format: `#datasource.schema.table`
   - DDL und Sample-Query sammeln
   - Sample-Row-Sammlung bleibt vorhanden, ist produktseitig aber global deaktiviert
   - sensible Felder maskieren
-  - Warnungen fuer degradierte DDL-Fallbacks
+  - Warnungen für degradierte DDL-Fallbacks
 - `ContextAssembler`
   - Prompt-Block erstellen
   - Token-Budget anwenden
@@ -88,7 +88,7 @@ System-Prompt und Limits in Preferences, API-Token im Secret Storage.
 2. `ChatController` extrahiert Mentions.
 3. Resolver löst Tabellen auf.
 4. DDL und Sample-Query werden gesammelt; Sample Rows werden derzeit nicht an das Modell gesendet.
-5. Kontext wird token-basiert gekuerzt; Trunkierung wird im Prompt vermerkt und als Warnung in der UI angezeigt.
+5. Kontext wird token-basiert gekürzt; Trunkierung wird im Prompt vermerkt und als Warnung in der UI angezeigt.
 6. Prompt wird strukturiert kombiniert: Nutzeranfrage + Arbeitsauftrag + Tabellenkontext.
 7. `LangChain4jOpenAiClient` streamt Antwort.
 8. UI zeigt Chunks live an, speichert finalen Verlauf.
@@ -99,26 +99,26 @@ System-Prompt und Limits in Preferences, API-Token im Secret Storage.
 2. Kontextaufbau sammelt pro referenzierter Tabelle DDL und Sample-Query.
    - die Sample-Row-Sammlung ist technisch weiter vorhanden, wird aber derzeit nicht in Requests aufgenommen.
    - zusätzlich wird der Datenbanktyp je Datasource ermittelt (Treibername, fallback Dialect).
-3. Budgeting kuerzt den Tabellenkontext bei Bedarf ueber `maxContextTokens`.
-   - die UI zeigt dafuer eine explizite Warnung, und der Prompt-Block enthaelt eine Truncation-Note.
+3. Budgeting kürzt den Tabellenkontext bei Bedarf über `maxContextTokens`.
+   - die UI zeigt dafür eine explizite Warnung, und der Prompt-Block enthält eine Truncation-Note.
 4. `ContextAwarePromptComposer` baut den finalen User-Prompt in Abschnitten auf:
    - `## Nutzeranfrage`
    - `## Arbeitsauftrag`
    - `## Tabellenkontext (automatisch aus der Datenbank extrahiert)`
 5. Die aktuelle User-Nachricht wird genau einmal gesendet:
    - als `userPrompt` im aktuellen Request
-   - nicht zusaetzlich in `history` desselben Requests
+   - nicht zusätzlich in `history` desselben Requests
 
 ## Logging-Pipeline
 
-- Logging ist ueber Preferences steuerbar:
+- Logging ist über Preferences steuerbar:
   - `LLM Logging = OFF | METADATA | FULL`
   - `LangChain HTTP Logging (Request/Response) = true/false`
-- `METADATA` schreibt kompakte Start/Ende-Infos (Modell, Groessen, Dauer) ins DBeaver `Error Log`.
-- `FULL` schreibt zusaetzlich vollstaendige Prompt-/Antwort-Payloads (SYSTEM/HISTORY/USER/CONTEXT/ASSISTANT) ins DBeaver `Error Log`.
-- Lange Payloads werden in `part x/y`-Bloecke gesplittet.
+- `METADATA` schreibt kompakte Start/Ende-Infos (Modell, Größen, Dauer) ins DBeaver `Error Log`.
+- `FULL` schreibt zusätzlich vollständige Prompt-/Antwort-Payloads (SYSTEM/HISTORY/USER/CONTEXT/ASSISTANT) ins DBeaver `Error Log`.
+- Lange Payloads werden in `part x/y`-Blöcke gesplittet.
 - Potenziell sensible Muster (`authorization`, `apiKey`, `token`) werden vor dem Volltext-Logging maskiert.
-- LangChain4j-HTTP-Logging (`logRequests`/`logResponses`) ist separat schaltbar und ergaenzt nur Framework-seitige Logs.
+- LangChain4j-HTTP-Logging (`logRequests`/`logResponses`) ist separat schaltbar und ergänzt nur Framework-seitige Logs.
 
 ## Fehlerpfade
 
