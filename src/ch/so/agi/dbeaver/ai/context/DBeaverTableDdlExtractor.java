@@ -14,9 +14,13 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.regex.Pattern;
 
 public final class DBeaverTableDdlExtractor implements TableDdlExtractor {
     private static final Log LOG = Log.getLog(DBeaverTableDdlExtractor.class);
+    private static final Pattern EMPTY_CREATE_TABLE_PATTERN = Pattern.compile(
+        "(?is)^create\\s+table\\b.*?\\(\\s*(?:(?:--[^\\r\\n]*(?:\\R|$))|(?:/\\*.*?\\*/)|\\s+)*\\)\\s*;?\\s*$"
+    );
     private final DdlFacade ddlFacade;
 
     public DBeaverTableDdlExtractor() {
@@ -37,22 +41,30 @@ public final class DBeaverTableDdlExtractor implements TableDdlExtractor {
 
         String ddl = null;
         try {
-            ddl = ddlFacade.generateObjectDdl(monitor, entity, createDdlOptions(), false);
+            ddl = normalizeNativeDdl(
+                ddlFacade.generateObjectDdl(monitor, entity, createDdlOptions(), false),
+                "generateObjectDDL",
+                resolvedTable.fullyQualifiedName()
+            );
         } catch (Exception ex) {
             LOG.debug("Native DDL generation via generateObjectDDL failed, trying getTableDDL fallback", ex);
         }
 
-        if (ddl == null || ddl.isBlank()) {
-            LOG.debug("generateObjectDDL returned no DDL, trying getTableDDL fallback");
+        if (ddl == null) {
+            LOG.debug("generateObjectDDL returned no usable DDL, trying getTableDDL fallback");
             try {
-                ddl = ddlFacade.getTableDdl(monitor, entity, createDdlOptions(), false);
+                ddl = normalizeNativeDdl(
+                    ddlFacade.getTableDdl(monitor, entity, createDdlOptions(), false),
+                    "getTableDDL",
+                    resolvedTable.fullyQualifiedName()
+                );
             } catch (Exception ex) {
                 LOG.debug("Native DDL generation via getTableDDL failed, using metadata fallback", ex);
             }
         }
 
-        if (ddl != null && !ddl.isBlank()) {
-            return ddl.trim();
+        if (ddl != null) {
+            return ddl;
         }
 
         LOG.debug("No native DDL available, using metadata fallback for " + resolvedTable.fullyQualifiedName());
@@ -118,6 +130,21 @@ public final class DBeaverTableDdlExtractor implements TableDdlExtractor {
 
     private Map<String, Object> createDdlOptions() {
         return new LinkedHashMap<>();
+    }
+
+    private String normalizeNativeDdl(String ddl, String source, String fullyQualifiedName) {
+        if (ddl == null || ddl.isBlank()) {
+            LOG.debug("Native DDL from " + source + " was blank for " + fullyQualifiedName);
+            return null;
+        }
+
+        String trimmed = ddl.trim();
+        if (EMPTY_CREATE_TABLE_PATTERN.matcher(trimmed).matches()) {
+            LOG.debug("Native DDL from " + source + " was structurally empty for " + fullyQualifiedName);
+            return null;
+        }
+
+        return trimmed;
     }
 
     interface DdlFacade {

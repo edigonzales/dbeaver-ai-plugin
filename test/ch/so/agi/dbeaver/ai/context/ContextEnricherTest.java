@@ -49,6 +49,24 @@ class ContextEnricherTest {
         assertThat(bundle.tableContexts().get(0).sampleRows().get(0).values()).containsEntry("password", "***");
     }
 
+    @Test
+    void warnsWhenOnlyDegradedDdlFallbackIsAvailable() {
+        TableReference ref = new TableReference("db", "s", "users", "#db.s.users");
+        ResolvedTable resolved = new ResolvedTable(ref, "db.s.users", "PostgreSQL", new Object(), new Object());
+
+        ContextEnricher enricher = new ContextEnricher(
+            refs -> new ResolvedTableResult(List.of(resolved), List.of()),
+            table -> "CREATE TABLE users(\n  -- no columns available\n);",
+            new StubSampleCollector(),
+            new SensitiveDataMasker()
+        );
+
+        var bundle = enricher.build(List.of(ref), 8, 5, 30, true, true);
+
+        assertThat(bundle.warnings())
+            .contains("DDL context for db.s.users is incomplete: no column metadata available.");
+    }
+
     private static final class StubSampleCollector implements SampleRowsCollector {
         @Override
         public List<TableSampleRow> collect(ResolvedTable resolvedTable, int maxRows, int maxColumns) {

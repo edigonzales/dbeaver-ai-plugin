@@ -13,6 +13,9 @@ import java.util.List;
 import java.util.Map;
 
 public final class ContextEnricher {
+    private static final String NO_COLUMNS_MARKER = "-- no columns available";
+    private static final String METADATA_UNAVAILABLE_MARKER = "-- metadata unavailable";
+
     private final TableReferenceResolver resolver;
     private final TableDdlExtractor ddlExtractor;
     private final SampleRowsCollector sampleRowsCollector;
@@ -59,6 +62,7 @@ public final class ContextEnricher {
                     ddl = "-- DDL unavailable: " + ex.getMessage();
                     warnings.add("DDL extraction failed for " + table.fullyQualifiedName() + ": " + ex.getMessage());
                 }
+                addDdlQualityWarning(warnings, table.fullyQualifiedName(), ddl);
             }
 
             String sampleSql = sampleRowsCollector.createSampleQueryText(table, sampleRowLimit);
@@ -83,6 +87,17 @@ public final class ContextEnricher {
         }
 
         return new ContextBundle(tableContexts, false, warnings);
+    }
+
+    private void addDdlQualityWarning(List<String> warnings, String fullyQualifiedName, String ddl) {
+        if (ddl == null || ddl.isBlank()) {
+            return;
+        }
+        if (ddl.contains(NO_COLUMNS_MARKER)) {
+            warnings.add("DDL context for " + fullyQualifiedName + " is incomplete: no column metadata available.");
+        } else if (ddl.contains(METADATA_UNAVAILABLE_MARKER)) {
+            warnings.add("DDL context for " + fullyQualifiedName + " is incomplete: metadata unavailable.");
+        }
     }
 
     private List<TableSampleRow> maskRows(List<TableSampleRow> rows) {

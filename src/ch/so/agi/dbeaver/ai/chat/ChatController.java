@@ -17,6 +17,9 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 
 public final class ChatController {
+    static final String CONTEXT_TRUNCATED_WARNING =
+        "Tabellenkontext wurde wegen Token-Budget gekürzt; nicht alle referenzierten Tabellen oder Beispielzeilen wurden mitgesendet.";
+
     private final ChatSession session;
     private final MentionParser mentionParser;
     private final ContextEnricher contextEnricher;
@@ -87,6 +90,9 @@ public final class ChatController {
         }
         for (String warning : boundedContext.warnings()) {
             listener.onWarning(warning);
+        }
+        if (boundedContext.truncated()) {
+            listener.onWarning(CONTEXT_TRUNCATED_WARNING);
         }
 
         String composedUserPrompt = promptComposer.composeUserPrompt(

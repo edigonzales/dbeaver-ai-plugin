@@ -977,7 +977,11 @@ public final class AiChatViewPart extends ViewPart implements ISaveablePart {
 
         @Override
         public void onContextBuilt(ContextBundle contextBundle, String promptBlock) {
-            setStatus(controller, "Kontext aufgebaut: " + contextBundle.tableContexts().size() + " Tabelle(n)");
+            String status = "Kontext aufgebaut: " + contextBundle.tableContexts().size() + " Tabelle(n)";
+            if (contextBundle.truncated()) {
+                status += " (gekürzt)";
+            }
+            setStatus(controller, status);
         }
 
         @Override

@@ -45,6 +45,35 @@ class DBeaverTableDdlExtractorTest {
     }
 
     @Test
+    void rejectsStructurallyEmptyNativeDdlAndFallsBackToGetTableDdl() throws Exception {
+        RecordingFacade facade = new RecordingFacade();
+        facade.generateObjectDdlResult = "CREATE TABLE empty_table (\n\n);";
+        facade.getTableDdlResult = "CREATE TABLE fallback_table(id int);";
+
+        DBeaverTableDdlExtractor extractor = new DBeaverTableDdlExtractor(facade);
+
+        String ddl = extractor.extractDdl(resolvedWithEntity(nativeEntity()));
+
+        assertThat(ddl).isEqualTo("CREATE TABLE fallback_table(id int);");
+        assertThat(facade.calls).containsExactly("generateObjectDdl", "getTableDdl");
+    }
+
+    @Test
+    void fallsBackToMetadataWhenBothNativeDdlPathsAreStructurallyEmpty() throws Exception {
+        RecordingFacade facade = new RecordingFacade();
+        facade.generateObjectDdlResult = "CREATE TABLE empty_table (\n  -- generated without columns\n);";
+        facade.getTableDdlResult = "CREATE TABLE empty_table (\n\n);";
+
+        DBeaverTableDdlExtractor extractor = new DBeaverTableDdlExtractor(facade);
+
+        String ddl = extractor.extractDdl(resolvedWithEntity(nativeEntity()));
+
+        assertThat(ddl).contains("CREATE TABLE");
+        assertThat(ddl).contains("-- no columns available");
+        assertThat(facade.calls).containsExactly("generateObjectDdl", "getTableDdl");
+    }
+
+    @Test
     void fallsBackWhenNoNativeEntityAvailable() throws Exception {
         DBeaverTableDdlExtractor extractor = new DBeaverTableDdlExtractor();
         ResolvedTable resolved = new ResolvedTable(

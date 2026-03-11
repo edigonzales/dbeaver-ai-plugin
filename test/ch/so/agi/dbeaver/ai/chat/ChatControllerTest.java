@@ -260,6 +260,57 @@ class ChatControllerTest {
         assertThat(request.userPrompt()).doesNotContain("@sql");
     }
 
+    @Test
+    void warnsWhenContextIsTruncatedByTokenBudget() {
+        ChatSession session = new ChatSession();
+        MentionParser mentionParser = new MentionParser();
+
+        TableReferenceResolver resolver = refs -> new ResolvedTableResult(
+            List.of(new ResolvedTable(refs.getFirst(), refs.getFirst().canonicalId(), "PostgreSQL", new Object(), new Object())),
+            List.of()
+        );
+        TableDdlExtractor ddlExtractor = table ->
+            "CREATE TABLE " + table.fullyQualifiedName() + "(id int, name varchar(1000), description varchar(1000));";
+        SampleRowsCollector sampleRowsCollector = new SampleRowsCollector() {
+            @Override
+            public List<TableSampleRow> collect(ResolvedTable resolvedTable, int maxRows, int maxColumns) {
+                Map<String, String> row = new LinkedHashMap<>();
+                row.put("id", "1");
+                row.put("name", "Alice");
+                return List.of(new TableSampleRow(row));
+            }
+
+            @Override
+            public String createSampleQueryText(ResolvedTable resolvedTable, int maxRows) {
+                return "SELECT * FROM " + resolvedTable.fullyQualifiedName() + " LIMIT " + maxRows + ";";
+            }
+        };
+
+        ChatController controller = new ChatController(
+            session,
+            mentionParser,
+            new ContextEnricher(resolver, ddlExtractor, sampleRowsCollector, new SensitiveDataMasker()),
+            new ContextAssembler(new PromptBudgetEstimator()),
+            new ContextAwarePromptComposer(),
+            (request, listener) -> {
+                listener.onComplete("ok");
+                return () -> {
+                };
+            }
+        );
+        RecordingUiListener ui = new RecordingUiListener();
+
+        controller.send(
+            "system",
+            PromptAugmentation.raw("Analyse #db.s.large_table"),
+            new ChatRequestOptions(8, 5, 30, true, true, 5, 10),
+            ui
+        );
+
+        assertThat(ui.warnings).contains(ChatController.CONTEXT_TRUNCATED_WARNING);
+        assertThat(ui.promptBlock).contains("Note: context was truncated due to token budget constraints.");
+    }
+
     private static final class RecordingUiListener implements ChatUiListener {
         private String beforeSendText;
         private final List<String> partialChunks = new ArrayList<>();
