@@ -61,7 +61,7 @@ public final class AiPreferencePageMain extends PreferencePage implements IWorkb
         promptGd.widthHint = 700;
         systemPromptText.setLayoutData(promptGd);
 
-        apiTokenText = createLabeledText(root, "OpenAI API Token", SWT.BORDER | SWT.PASSWORD);
+        apiTokenText = createLabeledText(root, "API Token", SWT.BORDER | SWT.PASSWORD);
         apiTokenText.setMessage("Leer lassen, um gespeicherten Token beizubehalten");
 
         tokenStatusLabel = new Label(root, SWT.NONE);

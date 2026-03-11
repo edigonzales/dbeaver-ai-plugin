@@ -6,8 +6,8 @@ import java.time.Duration;
 import java.util.Objects;
 
 public final class AiSettings {
-    public static final String DEFAULT_BASE_URL = "https://api.openai.com/v1";
-    public static final String DEFAULT_MODEL = "gpt-4o-mini";
+    public static final String DEFAULT_BASE_URL = "https://api.infomaniak.com/2/ai/103965/openai/v1/";
+    public static final String DEFAULT_MODEL = "qwen3";
     public static final String DEFAULT_SYSTEM_PROMPT = "Du bist ein Datenbank-Assistent und hilfst primaer beim Entwerfen, Debuggen und Optimieren herausfordernder SQL-Abfragen. Antworte immer auf Deutsch. Wenn du eine SQL-Abfrage lieferst, MUSS sie in einem ```sql```-Codeblock stehen. Zu jeder SQL-Abfrage MUSS eine kurze Erklaerung mitgeliefert werden (Zweck, zentrale Join-/Filter-/Aggregationslogik, Annahmen). Nutze bereitgestellten Tabellenkontext, insbesondere DDL, vorrangig und nenne fehlende Informationen explizit.";
     public static final int DEFAULT_SAMPLE_ROW_LIMIT = 5;
     public static final int DEFAULT_MAX_REFERENCED_TABLES = 8;

@@ -87,10 +87,10 @@ Alle Settings (UI, Key, Default, Verhalten):
 
 | UI Feld | Key / Secret ID | Default | Bedeutung / Verhalten |
 |---|---|---|---|
-| Base URL | `ch.so.agi.dbeaver.ai.baseUrl` | `https://api.openai.com/v1` | Basis-URL fuer den OpenAI-kompatiblen Endpoint (LangChain4j OpenAI Client). Leer/Blank faellt auf Default zurueck. |
-| Model | `ch.so.agi.dbeaver.ai.model` | `gpt-4o-mini` | Modellname fuer Chat-Requests. Leer/Blank faellt auf Default zurueck. |
+| Base URL | `ch.so.agi.dbeaver.ai.baseUrl` | `https://api.infomaniak.com/2/ai/103965/openai/v1/` | Basis-URL fuer den standardmaessig verwendeten Infomaniak OpenAI-kompatiblen Endpoint (LangChain4j OpenAI Client). Leer/Blank faellt auf Default zurueck. |
+| Model | `ch.so.agi.dbeaver.ai.model` | `qwen3` | Modellname fuer Chat-Requests. Leer/Blank faellt auf Default zurueck. |
 | System Prompt | `ch.so.agi.dbeaver.ai.systemPrompt` | Deutsch, SQL als SQL-Codeblock + Erklaerung | System-Nachricht, die jedem Request vorangestellt wird. Fokus: anspruchsvolle SQL-Abfragen; Antworten auf Deutsch; SQL zwingend als SQL-Codeblock; pro SQL immer Erklaerung. Vollstaendig durch Benutzer austauschbar. |
-| OpenAI API Token | `ch.so.agi.dbeaver.ai.openai.apiToken` (Secret Store) | kein Wert | Wird **nicht** in Preferences gespeichert, sondern im DBeaver Secret Store. Leeres Token-Feld beim Speichern behaelt den vorhandenen Secret-Wert. Checkbox "Gespeicherten API Token loeschen" entfernt den Secret-Wert. |
+| API Token | `ch.so.agi.dbeaver.ai.openai.apiToken` (Secret Store) | kein Wert | Wird **nicht** in Preferences gespeichert, sondern im DBeaver Secret Store. Leeres Token-Feld beim Speichern behaelt den vorhandenen Secret-Wert. Checkbox "Gespeicherten API Token loeschen" entfernt den Secret-Wert. |
 | DDL im Kontext mitsenden | `ch.so.agi.dbeaver.ai.includeDdl` | `true` | Wenn aktiv, wird fuer referenzierte Tabellen DDL in den Prompt aufgenommen. |
 | Sample Rows im Kontext mitsenden | `ch.so.agi.dbeaver.ai.includeSampleRows` | `false` | Sichtbar, aber in der UI deaktiviert. Das Plugin sendet derzeit keine Sample Rows an das Modell. Gespeicherte Legacy-`true`-Werte werden ignoriert. |
 | Sample Row Limit | `ch.so.agi.dbeaver.ai.sampleRowLimit` | `5` | Aus Kompatibilitaetsgruenden sichtbar, derzeit aber in der UI deaktiviert und ohne Wirkung auf den gesendeten Sample-Row-Kontext. Werte `<1` werden intern auf `1` angehoben. |
