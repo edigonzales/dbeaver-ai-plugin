@@ -19,6 +19,9 @@ public final class AiSettings {
     public static final boolean DEFAULT_INCLUDE_SAMPLE_ROWS = false;
     public static final int DEFAULT_MENTION_PROPOSAL_LIMIT = 40;
     public static final int DEFAULT_MENTION_CANDIDATE_LIMIT = 100_000;
+    public static final int DEFAULT_TIMEOUT_SECONDS = 90;
+    public static final int MIN_TIMEOUT_SECONDS = 10;
+    public static final int MAX_TIMEOUT_SECONDS = 600;
     public static final LlmLogMode DEFAULT_LLM_LOG_MODE = LlmLogMode.METADATA;
     public static final boolean DEFAULT_LANGCHAIN_HTTP_LOGGING = false;
 
@@ -34,6 +37,7 @@ public final class AiSettings {
     private final int maxContextTokens;
     private final int mentionProposalLimit;
     private final int mentionCandidateLimit;
+    private final int timeoutSeconds;
     private final LlmLogMode llmLogMode;
     private final boolean langchainHttpLogging;
     private final double temperature;
@@ -53,7 +57,8 @@ public final class AiSettings {
         int mentionCandidateLimit,
         LlmLogMode llmLogMode,
         boolean langchainHttpLogging,
-        double temperature
+        double temperature,
+        int timeoutSeconds
     ) {
         this.baseUrl = normalizeOrDefault(baseUrl, DEFAULT_BASE_URL);
         this.model = normalizeOrDefault(model, DEFAULT_MODEL);
@@ -67,6 +72,7 @@ public final class AiSettings {
         this.maxContextTokens = Math.max(100, maxContextTokens);
         this.mentionProposalLimit = Math.max(1, mentionProposalLimit);
         this.mentionCandidateLimit = Math.max(1, mentionCandidateLimit);
+        this.timeoutSeconds = clampTimeoutSeconds(timeoutSeconds);
         this.llmLogMode = llmLogMode == null ? DEFAULT_LLM_LOG_MODE : llmLogMode;
         this.langchainHttpLogging = langchainHttpLogging;
         this.temperature = clampTemperature(temperature);
@@ -84,6 +90,10 @@ public final class AiSettings {
             return DEFAULT_TEMPERATURE;
         }
         return Math.max(0.0, Math.min(2.0, value));
+    }
+
+    private static int clampTimeoutSeconds(int value) {
+        return Math.max(MIN_TIMEOUT_SECONDS, Math.min(MAX_TIMEOUT_SECONDS, value));
     }
 
     private static boolean normalizeIncludeSampleRows(boolean ignored) {
@@ -150,8 +160,12 @@ public final class AiSettings {
         return temperature;
     }
 
+    public int timeoutSeconds() {
+        return timeoutSeconds;
+    }
+
     public Duration timeout() {
-        return Duration.ofSeconds(90);
+        return Duration.ofSeconds(timeoutSeconds);
     }
 
     public ChatRequestOptions toChatRequestOptions() {
@@ -184,7 +198,8 @@ public final class AiSettings {
             mentionCandidateLimit,
             llmLogMode,
             langchainHttpLogging,
-            value
+            value,
+            timeoutSeconds
         );
     }
 
@@ -203,6 +218,7 @@ public final class AiSettings {
             maxContextTokens,
             mentionProposalLimit,
             mentionCandidateLimit,
+            timeoutSeconds,
             llmLogMode,
             langchainHttpLogging,
             temperature
@@ -226,6 +242,7 @@ public final class AiSettings {
             && maxContextTokens == other.maxContextTokens
             && mentionProposalLimit == other.mentionProposalLimit
             && mentionCandidateLimit == other.mentionCandidateLimit
+            && timeoutSeconds == other.timeoutSeconds
             && llmLogMode == other.llmLogMode
             && langchainHttpLogging == other.langchainHttpLogging
             && Double.compare(temperature, other.temperature) == 0

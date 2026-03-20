@@ -18,6 +18,7 @@ public final class AiPreferenceConstants {
     public static final String PREF_MENTION_PROPOSAL_LIMIT = "ch.so.agi.dbeaver.ai.mentionProposalLimit";
     public static final String PREF_MENTION_CANDIDATE_LIMIT = "ch.so.agi.dbeaver.ai.mentionCandidateLimit";
     public static final String PREF_TEMPERATURE = "ch.so.agi.dbeaver.ai.temperature";
+    public static final String PREF_TIMEOUT_SECONDS = "ch.so.agi.dbeaver.ai.timeoutSeconds";
     public static final String PREF_LLM_LOG_MODE = "ch.so.agi.dbeaver.ai.llmLogMode";
     public static final String PREF_LANGCHAIN_HTTP_LOGGING = "ch.so.agi.dbeaver.ai.langchainHttpLogging";
     public static final String PREF_CHAT_SPLIT_WEIGHTS = "ch.so.agi.dbeaver.ai.chatSplitWeights";

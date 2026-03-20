@@ -28,6 +28,7 @@ public final class AiPreferencePageMain extends PreferencePage implements IWorkb
     private Text mentionProposalLimitText;
     private Text mentionCandidateLimitText;
     private Text temperatureText;
+    private Text timeoutSecondsText;
     private Combo llmLogModeCombo;
     private Label sampleRowsHintLabel;
 
@@ -106,6 +107,7 @@ public final class AiPreferencePageMain extends PreferencePage implements IWorkb
         mentionProposalLimitText = createLabeledText(root, "Autocomplete Proposal Limit", SWT.BORDER);
         mentionCandidateLimitText = createLabeledText(root, "Autocomplete Candidate Scan Limit", SWT.BORDER);
         temperatureText = createLabeledText(root, "Temperature (0.0 - 2.0)", SWT.BORDER);
+        timeoutSecondsText = createLabeledText(root, "Timeout (Sekunden, 10-600)", SWT.BORDER);
         llmLogModeCombo = createLabeledCombo(root, "LLM Logging", new String[]{"OFF", "METADATA", "FULL"});
 
         langchainHttpLoggingButton = new Button(root, SWT.CHECK);
@@ -163,7 +165,8 @@ public final class AiPreferencePageMain extends PreferencePage implements IWorkb
             AiSettings.DEFAULT_MENTION_CANDIDATE_LIMIT,
             AiSettings.DEFAULT_LLM_LOG_MODE,
             AiSettings.DEFAULT_LANGCHAIN_HTTP_LOGGING,
-            AiSettings.DEFAULT_TEMPERATURE
+            AiSettings.DEFAULT_TEMPERATURE,
+            AiSettings.DEFAULT_TIMEOUT_SECONDS
         ));
         clearTokenButton.setSelection(false);
         apiTokenText.setText("");
@@ -183,6 +186,7 @@ public final class AiPreferencePageMain extends PreferencePage implements IWorkb
         mentionProposalLimitText.setText(Integer.toString(settings.mentionProposalLimit()));
         mentionCandidateLimitText.setText(Integer.toString(settings.mentionCandidateLimit()));
         temperatureText.setText(Double.toString(settings.temperature()));
+        timeoutSecondsText.setText(Integer.toString(settings.timeoutSeconds()));
         llmLogModeCombo.setText(settings.llmLogMode().name());
 
         includeDdlButton.setSelection(settings.includeDdl());
@@ -209,7 +213,8 @@ public final class AiPreferencePageMain extends PreferencePage implements IWorkb
             parseIntOrDefault(mentionCandidateLimitText.getText(), AiSettings.DEFAULT_MENTION_CANDIDATE_LIMIT),
             parseLlmLogMode(llmLogModeCombo.getText()),
             langchainHttpLoggingButton.getSelection(),
-            parseDoubleOrDefault(temperatureText.getText(), AiSettings.DEFAULT_TEMPERATURE)
+            parseDoubleOrDefault(temperatureText.getText(), AiSettings.DEFAULT_TEMPERATURE),
+            parseIntOrDefault(timeoutSecondsText.getText(), AiSettings.DEFAULT_TIMEOUT_SECONDS)
         );
     }
 

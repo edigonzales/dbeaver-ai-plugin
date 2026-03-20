@@ -33,6 +33,7 @@ class AiSettingsServiceTest {
         assertThat(settings.llmLogMode()).isEqualTo(AiSettings.DEFAULT_LLM_LOG_MODE);
         assertThat(settings.langchainHttpLogging()).isEqualTo(AiSettings.DEFAULT_LANGCHAIN_HTTP_LOGGING);
         assertThat(settings.temperature()).isEqualTo(AiSettings.DEFAULT_TEMPERATURE);
+        assertThat(settings.timeoutSeconds()).isEqualTo(AiSettings.DEFAULT_TIMEOUT_SECONDS);
     }
 
     @Test
@@ -67,13 +68,15 @@ class AiSettingsServiceTest {
             60,
             LlmLogMode.FULL,
             true,
-            1.5
+            1.5,
+            123
         );
         AiSettingsService service = new AiSettingsService();
 
         service.saveSettings(store, settings);
 
         assertThat(store.getBoolean(AiPreferenceConstants.PREF_INCLUDE_SAMPLE_ROWS)).isFalse();
+        assertThat(store.getInt(AiPreferenceConstants.PREF_TIMEOUT_SECONDS)).isEqualTo(123);
         assertThat(store.saved).isTrue();
     }
 
@@ -98,6 +101,7 @@ class AiSettingsServiceTest {
         store.setValue(AiPreferenceConstants.PREF_LLM_LOG_MODE, LlmLogMode.FULL.name());
         store.setValue(AiPreferenceConstants.PREF_LANGCHAIN_HTTP_LOGGING, true);
         store.setValue(AiPreferenceConstants.PREF_TEMPERATURE, "1.5");
+        store.setValue(AiPreferenceConstants.PREF_TIMEOUT_SECONDS, 240);
 
         AiSettings settings = new AiSettingsService().loadSettings(store);
 
@@ -116,6 +120,27 @@ class AiSettingsServiceTest {
         assertThat(settings.llmLogMode()).isEqualTo(LlmLogMode.FULL);
         assertThat(settings.langchainHttpLogging()).isTrue();
         assertThat(settings.temperature()).isEqualTo(1.5);
+        assertThat(settings.timeoutSeconds()).isEqualTo(240);
+    }
+
+    @Test
+    void loadSettings_usesDefaultTimeoutWhenStoredValueIsInvalid() {
+        InMemoryPreferenceStore store = new InMemoryPreferenceStore();
+        store.setValue(AiPreferenceConstants.PREF_TIMEOUT_SECONDS, 1);
+
+        AiSettings settings = new AiSettingsService().loadSettings(store);
+
+        assertThat(settings.timeoutSeconds()).isEqualTo(AiSettings.DEFAULT_TIMEOUT_SECONDS);
+    }
+
+    @Test
+    void loadSettings_usesDefaultTimeoutWhenStoredValueIsNotANumber() {
+        InMemoryPreferenceStore store = new InMemoryPreferenceStore();
+        store.setValue(AiPreferenceConstants.PREF_TIMEOUT_SECONDS, "abc");
+
+        AiSettings settings = new AiSettingsService().loadSettings(store);
+
+        assertThat(settings.timeoutSeconds()).isEqualTo(AiSettings.DEFAULT_TIMEOUT_SECONDS);
     }
 
     private static final class InMemoryPreferenceStore implements DBPPreferenceStore {

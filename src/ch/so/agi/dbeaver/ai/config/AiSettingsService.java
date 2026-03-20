@@ -33,7 +33,14 @@ public final class AiSettingsService {
             getPreferenceInt(store, AiPreferenceConstants.PREF_MENTION_CANDIDATE_LIMIT, AiSettings.DEFAULT_MENTION_CANDIDATE_LIMIT),
             parseLlmLogMode(getPreferenceString(store, AiPreferenceConstants.PREF_LLM_LOG_MODE, AiSettings.DEFAULT_LLM_LOG_MODE.name())),
             getPreferenceBoolean(store, AiPreferenceConstants.PREF_LANGCHAIN_HTTP_LOGGING, AiSettings.DEFAULT_LANGCHAIN_HTTP_LOGGING),
-            parseDoubleOrDefault(store.getString(AiPreferenceConstants.PREF_TEMPERATURE), AiSettings.DEFAULT_TEMPERATURE)
+            parseDoubleOrDefault(store.getString(AiPreferenceConstants.PREF_TEMPERATURE), AiSettings.DEFAULT_TEMPERATURE),
+            getPreferenceIntInRangeOrDefault(
+                store,
+                AiPreferenceConstants.PREF_TIMEOUT_SECONDS,
+                AiSettings.DEFAULT_TIMEOUT_SECONDS,
+                AiSettings.MIN_TIMEOUT_SECONDS,
+                AiSettings.MAX_TIMEOUT_SECONDS
+            )
         );
     }
 
@@ -46,6 +53,28 @@ public final class AiSettingsService {
         // First try to get the value; if not set (returns 0), fall back to default
         int value = store.getInt(key);
         return (value == 0) ? defaultValue : value;
+    }
+
+    private int getPreferenceIntInRangeOrDefault(
+        DBPPreferenceStore store,
+        String key,
+        int defaultValue,
+        int minValue,
+        int maxValue
+    ) {
+        String raw = store.getString(key);
+        if (raw == null || raw.isBlank()) {
+            return defaultValue;
+        }
+        try {
+            int value = Integer.parseInt(raw.trim());
+            if (value < minValue || value > maxValue) {
+                return defaultValue;
+            }
+            return value;
+        } catch (NumberFormatException ex) {
+            return defaultValue;
+        }
     }
 
     private boolean getPreferenceBoolean(DBPPreferenceStore store, String key, boolean defaultValue) {
@@ -81,6 +110,7 @@ public final class AiSettingsService {
         store.setValue(AiPreferenceConstants.PREF_LLM_LOG_MODE, settings.llmLogMode().name());
         store.setValue(AiPreferenceConstants.PREF_LANGCHAIN_HTTP_LOGGING, settings.langchainHttpLogging());
         store.setValue(AiPreferenceConstants.PREF_TEMPERATURE, Double.toString(settings.temperature()));
+        store.setValue(AiPreferenceConstants.PREF_TIMEOUT_SECONDS, settings.timeoutSeconds());
 
         try {
             store.save();

@@ -2,6 +2,8 @@ package ch.so.agi.dbeaver.ai.config;
 
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 class AiSettingsTest {
@@ -22,7 +24,8 @@ class AiSettingsTest {
             -7,
             null,
             true,
-            9.0
+            9.0,
+            1
         );
 
         assertThat(settings.baseUrl()).isEqualTo(AiSettings.DEFAULT_BASE_URL);
@@ -39,6 +42,8 @@ class AiSettingsTest {
         assertThat(settings.llmLogMode()).isEqualTo(LlmLogMode.METADATA);
         assertThat(settings.langchainHttpLogging()).isTrue();
         assertThat(settings.temperature()).isEqualTo(2.0);
+        assertThat(settings.timeoutSeconds()).isEqualTo(AiSettings.MIN_TIMEOUT_SECONDS);
+        assertThat(settings.timeout()).isEqualTo(Duration.ofSeconds(AiSettings.MIN_TIMEOUT_SECONDS));
     }
 
     @Test
@@ -58,11 +63,56 @@ class AiSettingsTest {
             100_000,
             LlmLogMode.METADATA,
             false,
-            0.0
+            0.0,
+            120
         );
 
         assertThat(settings.toChatRequestOptions().includeSampleRows()).isFalse();
         assertThat(settings.toChatRequestOptions().sampleRowLimit()).isEqualTo(AiSettings.DEFAULT_SAMPLE_ROW_LIMIT);
         assertThat(settings.toChatRequestOptions().maxColumnsPerSample()).isEqualTo(AiSettings.DEFAULT_MAX_COLUMNS_PER_SAMPLE);
+        assertThat(settings.timeout()).isEqualTo(Duration.ofSeconds(120));
+    }
+
+    @Test
+    void clampsTimeoutToConfiguredBounds() {
+        AiSettings tooSmall = new AiSettings(
+            "https://example.com",
+            "model",
+            "prompt",
+            1,
+            1,
+            1,
+            true,
+            false,
+            1,
+            100,
+            1,
+            1,
+            LlmLogMode.OFF,
+            false,
+            0.0,
+            5
+        );
+        AiSettings tooLarge = new AiSettings(
+            "https://example.com",
+            "model",
+            "prompt",
+            1,
+            1,
+            1,
+            true,
+            false,
+            1,
+            100,
+            1,
+            1,
+            LlmLogMode.OFF,
+            false,
+            0.0,
+            999
+        );
+
+        assertThat(tooSmall.timeoutSeconds()).isEqualTo(AiSettings.MIN_TIMEOUT_SECONDS);
+        assertThat(tooLarge.timeoutSeconds()).isEqualTo(AiSettings.MAX_TIMEOUT_SECONDS);
     }
 }
