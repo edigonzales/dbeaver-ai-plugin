@@ -13,8 +13,6 @@ public final class AiPreferenceInitializer extends AbstractPreferenceInitializer
         try {
             DBPPreferenceStore store = DBWorkbench.getPlatform().getPreferenceStore();
 
-            store.setDefault(AiPreferenceConstants.PREF_BASE_URL, AiSettings.DEFAULT_BASE_URL);
-            store.setDefault(AiPreferenceConstants.PREF_MODEL, AiSettings.DEFAULT_MODEL);
             store.setDefault(AiPreferenceConstants.PREF_SYSTEM_PROMPT, AiSettings.DEFAULT_SYSTEM_PROMPT);
 
             store.setDefault(AiPreferenceConstants.PREF_SAMPLE_ROW_LIMIT, AiSettings.DEFAULT_SAMPLE_ROW_LIMIT);
@@ -29,8 +27,12 @@ public final class AiPreferenceInitializer extends AbstractPreferenceInitializer
             store.setDefault(AiPreferenceConstants.PREF_MENTION_PROPOSAL_LIMIT, AiSettings.DEFAULT_MENTION_PROPOSAL_LIMIT);
             store.setDefault(AiPreferenceConstants.PREF_MENTION_CANDIDATE_LIMIT, AiSettings.DEFAULT_MENTION_CANDIDATE_LIMIT);
             store.setDefault(AiPreferenceConstants.PREF_TEMPERATURE, AiSettings.DEFAULT_TEMPERATURE);
+            store.setDefault(AiPreferenceConstants.PREF_TIMEOUT_SECONDS, AiSettings.DEFAULT_TIMEOUT_SECONDS);
             store.setDefault(AiPreferenceConstants.PREF_LLM_LOG_MODE, AiSettings.DEFAULT_LLM_LOG_MODE.name());
             store.setDefault(AiPreferenceConstants.PREF_LANGCHAIN_HTTP_LOGGING, AiSettings.DEFAULT_LANGCHAIN_HTTP_LOGGING);
+            store.setDefault(AiPreferenceConstants.PREF_LLM_ENDPOINT_COUNT, 0);
+            store.setDefault(AiPreferenceConstants.PREF_CHAT_SELECTED_ENDPOINT_ID, "");
+            store.setDefault(AiPreferenceConstants.PREF_CHAT_SELECTED_MODEL, "");
             store.setDefault(AiPreferenceConstants.PREF_CHAT_SPLIT_WEIGHTS, "70,30");
             store.setDefault(AiPreferenceConstants.PREF_LAST_PROMPT_PATH, "");
 

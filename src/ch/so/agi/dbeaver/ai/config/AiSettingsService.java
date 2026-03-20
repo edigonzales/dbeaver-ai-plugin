@@ -9,9 +9,16 @@ import org.jkiss.dbeaver.model.secret.DBSSecretController;
 import org.jkiss.dbeaver.runtime.DBWorkbench;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
 
 public final class AiSettingsService {
     private static final Log LOG = Log.getLog(AiSettingsService.class);
+    private static final String ENDPOINT_ID_SUFFIX = ".id";
+    private static final String ENDPOINT_BASE_URL_SUFFIX = ".baseUrl";
+    private static final String ENDPOINT_MODELS_SUFFIX = ".models";
 
     public AiSettings loadSettings() {
         return loadSettings(preferenceStore());
@@ -19,8 +26,7 @@ public final class AiSettingsService {
 
     AiSettings loadSettings(DBPPreferenceStore store) {
         return new AiSettings(
-            getPreferenceString(store, AiPreferenceConstants.PREF_BASE_URL, AiSettings.DEFAULT_BASE_URL),
-            getPreferenceString(store, AiPreferenceConstants.PREF_MODEL, AiSettings.DEFAULT_MODEL),
+            loadUserEndpoints(store),
             getPreferenceString(store, AiPreferenceConstants.PREF_SYSTEM_PROMPT, AiSettings.DEFAULT_SYSTEM_PROMPT),
             getPreferenceInt(store, AiPreferenceConstants.PREF_SAMPLE_ROW_LIMIT, AiSettings.DEFAULT_SAMPLE_ROW_LIMIT),
             getPreferenceInt(store, AiPreferenceConstants.PREF_MAX_REFERENCED_TABLES, AiSettings.DEFAULT_MAX_REFERENCED_TABLES),
@@ -44,13 +50,40 @@ public final class AiSettingsService {
         );
     }
 
+    private List<LlmEndpointConfig> loadUserEndpoints(DBPPreferenceStore store) {
+        int count = getPreferenceInt(store, AiPreferenceConstants.PREF_LLM_ENDPOINT_COUNT, 0);
+        List<LlmEndpointConfig> endpoints = new ArrayList<>();
+        Set<String> seenBaseUrls = new LinkedHashSet<>();
+
+        for (int i = 0; i < count; i++) {
+            String id = trimToEmpty(store.getString(endpointKey(i, ENDPOINT_ID_SUFFIX)));
+            String baseUrl = trimToEmpty(store.getString(endpointKey(i, ENDPOINT_BASE_URL_SUFFIX)));
+            if (id.isEmpty() || baseUrl.isEmpty()) {
+                continue;
+            }
+            String dedupe = baseUrl.toLowerCase();
+            if (seenBaseUrls.contains(dedupe)) {
+                LOG.warn("Ignoring duplicate LLM endpoint base URL: " + baseUrl);
+                continue;
+            }
+            seenBaseUrls.add(dedupe);
+            List<String> models = parseModelsCsv(store.getString(endpointKey(i, ENDPOINT_MODELS_SUFFIX)));
+            endpoints.add(LlmEndpointConfig.user(id, baseUrl, models));
+        }
+
+        return endpoints;
+    }
+
+    private String endpointKey(int index, String suffix) {
+        return AiPreferenceConstants.PREF_LLM_ENDPOINT_ID_PREFIX + index + suffix;
+    }
+
     private String getPreferenceString(DBPPreferenceStore store, String key, String defaultValue) {
         String value = store.getString(key);
         return (value == null || value.isBlank()) ? defaultValue : value.trim();
     }
 
     private int getPreferenceInt(DBPPreferenceStore store, String key, int defaultValue) {
-        // First try to get the value; if not set (returns 0), fall back to default
         int value = store.getInt(key);
         return (value == 0) ? defaultValue : value;
     }
@@ -78,8 +111,6 @@ public final class AiSettingsService {
     }
 
     private boolean getPreferenceBoolean(DBPPreferenceStore store, String key, boolean defaultValue) {
-        // Use store.getBoolean() which returns false for unset values
-        // We need to check if the value was explicitly set
         String stringValue = store.getString(key);
         if (stringValue == null) {
             return defaultValue;
@@ -92,8 +123,6 @@ public final class AiSettingsService {
     }
 
     void saveSettings(DBPPreferenceStore store, AiSettings settings) {
-        store.setValue(AiPreferenceConstants.PREF_BASE_URL, settings.baseUrl());
-        store.setValue(AiPreferenceConstants.PREF_MODEL, settings.model());
         store.setValue(AiPreferenceConstants.PREF_SYSTEM_PROMPT, settings.systemPrompt());
 
         store.setValue(AiPreferenceConstants.PREF_SAMPLE_ROW_LIMIT, settings.sampleRowLimit());
@@ -112,6 +141,21 @@ public final class AiSettingsService {
         store.setValue(AiPreferenceConstants.PREF_TEMPERATURE, Double.toString(settings.temperature()));
         store.setValue(AiPreferenceConstants.PREF_TIMEOUT_SECONDS, settings.timeoutSeconds());
 
+        List<LlmEndpointConfig> userEndpoints = settings.endpoints();
+        int previousCount = getPreferenceInt(store, AiPreferenceConstants.PREF_LLM_ENDPOINT_COUNT, 0);
+        store.setValue(AiPreferenceConstants.PREF_LLM_ENDPOINT_COUNT, userEndpoints.size());
+        for (int i = 0; i < userEndpoints.size(); i++) {
+            LlmEndpointConfig endpoint = userEndpoints.get(i);
+            store.setValue(endpointKey(i, ENDPOINT_ID_SUFFIX), endpoint.id());
+            store.setValue(endpointKey(i, ENDPOINT_BASE_URL_SUFFIX), endpoint.baseUrl());
+            store.setValue(endpointKey(i, ENDPOINT_MODELS_SUFFIX), String.join(",", endpoint.models()));
+        }
+        for (int i = userEndpoints.size(); i < previousCount; i++) {
+            store.setValue(endpointKey(i, ENDPOINT_ID_SUFFIX), "");
+            store.setValue(endpointKey(i, ENDPOINT_BASE_URL_SUFFIX), "");
+            store.setValue(endpointKey(i, ENDPOINT_MODELS_SUFFIX), "");
+        }
+
         try {
             store.save();
         } catch (IOException e) {
@@ -119,13 +163,13 @@ public final class AiSettingsService {
         }
     }
 
-    public String loadApiToken() {
+    public String loadApiToken(String endpointId) {
         try {
             DBSSecretController controller = secretController();
             if (controller == null) {
                 return "";
             }
-            String token = controller.getPrivateSecretValue(AiPreferenceConstants.SECRET_OPENAI_API_TOKEN);
+            String token = controller.getPrivateSecretValue(secretKeyForEndpoint(endpointId));
             return token == null ? "" : token;
         } catch (DBException e) {
             LOG.warn("Failed to load API token from secret storage", e);
@@ -133,22 +177,46 @@ public final class AiSettingsService {
         }
     }
 
-    public void saveApiToken(String token) {
+    public void saveApiToken(String endpointId, String token) {
         try {
             DBSSecretController controller = secretController();
             if (controller == null) {
                 LOG.warn("No secret controller available, API token not persisted");
                 return;
             }
-            controller.setPrivateSecretValue(AiPreferenceConstants.SECRET_OPENAI_API_TOKEN, token == null ? "" : token);
+            controller.setPrivateSecretValue(secretKeyForEndpoint(endpointId), token == null ? "" : token);
             controller.flushChanges();
         } catch (DBException e) {
             LOG.warn("Failed to store API token in secret storage", e);
         }
     }
 
-    public boolean hasApiToken() {
-        return !loadApiToken().isBlank();
+    public void deleteApiToken(String endpointId) {
+        saveApiToken(endpointId, "");
+    }
+
+    public boolean hasApiToken(String endpointId) {
+        return !loadApiToken(endpointId).isBlank();
+    }
+
+    String secretKeyForEndpoint(String endpointId) {
+        String normalizedId = trimToEmpty(endpointId);
+        if (normalizedId.isEmpty() || AiSettings.BUILTIN_OPENAI_ENDPOINT_ID.equals(normalizedId)) {
+            return AiPreferenceConstants.SECRET_OPENAI_API_TOKEN;
+        }
+        return "ch.so.agi.dbeaver.ai.endpoint." + sanitizeForSecretKey(normalizedId) + ".apiToken";
+    }
+
+    private String sanitizeForSecretKey(String endpointId) {
+        StringBuilder normalized = new StringBuilder();
+        for (char c : endpointId.toCharArray()) {
+            if (Character.isLetterOrDigit(c) || c == '-' || c == '_') {
+                normalized.append(c);
+            } else {
+                normalized.append('_');
+            }
+        }
+        return normalized.toString();
     }
 
     private DBPPreferenceStore preferenceStore() {
@@ -175,6 +243,25 @@ public final class AiSettingsService {
         } catch (NumberFormatException ex) {
             return fallback;
         }
+    }
+
+    private String trimToEmpty(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    static List<String> parseModelsCsv(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return List.of();
+        }
+        LinkedHashSet<String> models = new LinkedHashSet<>();
+        String[] parts = raw.split(",");
+        for (String part : parts) {
+            String model = part == null ? "" : part.trim();
+            if (!model.isEmpty()) {
+                models.add(model);
+            }
+        }
+        return List.copyOf(models);
     }
 
     private LlmLogMode parseLlmLogMode(String value) {

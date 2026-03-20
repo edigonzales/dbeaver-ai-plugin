@@ -5,8 +5,6 @@ public final class AiPreferenceConstants {
     }
 
     public static final String PREF_SYSTEM_PROMPT = "ch.so.agi.dbeaver.ai.systemPrompt";
-    public static final String PREF_MODEL = "ch.so.agi.dbeaver.ai.model";
-    public static final String PREF_BASE_URL = "ch.so.agi.dbeaver.ai.baseUrl";
     public static final String PREF_SAMPLE_ROW_LIMIT = "ch.so.agi.dbeaver.ai.sampleRowLimit";
     public static final String PREF_MAX_REFERENCED_TABLES = "ch.so.agi.dbeaver.ai.maxReferencedTables";
     public static final String PREF_MAX_COLUMNS_PER_SAMPLE = "ch.so.agi.dbeaver.ai.maxColumnsPerSample";
@@ -21,6 +19,10 @@ public final class AiPreferenceConstants {
     public static final String PREF_TIMEOUT_SECONDS = "ch.so.agi.dbeaver.ai.timeoutSeconds";
     public static final String PREF_LLM_LOG_MODE = "ch.so.agi.dbeaver.ai.llmLogMode";
     public static final String PREF_LANGCHAIN_HTTP_LOGGING = "ch.so.agi.dbeaver.ai.langchainHttpLogging";
+    public static final String PREF_LLM_ENDPOINT_COUNT = "ch.so.agi.dbeaver.ai.llmEndpoint.count";
+    public static final String PREF_LLM_ENDPOINT_ID_PREFIX = "ch.so.agi.dbeaver.ai.llmEndpoint.";
+    public static final String PREF_CHAT_SELECTED_ENDPOINT_ID = "ch.so.agi.dbeaver.ai.chatSelectedEndpointId";
+    public static final String PREF_CHAT_SELECTED_MODEL = "ch.so.agi.dbeaver.ai.chatSelectedModel";
     public static final String PREF_CHAT_SPLIT_WEIGHTS = "ch.so.agi.dbeaver.ai.chatSplitWeights";
     public static final String PREF_LAST_PROMPT_PATH = "ch.so.agi.dbeaver.ai.lastPromptPath";
 

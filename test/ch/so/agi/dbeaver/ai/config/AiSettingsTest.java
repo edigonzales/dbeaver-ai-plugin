@@ -3,6 +3,7 @@ package ch.so.agi.dbeaver.ai.config;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -10,8 +11,7 @@ class AiSettingsTest {
     @Test
     void normalizesInvalidInputsToSafeDefaults() {
         AiSettings settings = new AiSettings(
-            " ",
-            "",
+            List.of(LlmEndpointConfig.user(" e1 ", " https://example.com/v1 ", List.of("m1", "m1", " "))),
             "",
             -1,
             -5,
@@ -28,8 +28,6 @@ class AiSettingsTest {
             1
         );
 
-        assertThat(settings.baseUrl()).isEqualTo(AiSettings.DEFAULT_BASE_URL);
-        assertThat(settings.model()).isEqualTo(AiSettings.DEFAULT_MODEL);
         assertThat(settings.systemPrompt()).isEqualTo(AiSettings.DEFAULT_SYSTEM_PROMPT);
         assertThat(settings.sampleRowLimit()).isEqualTo(1);
         assertThat(settings.maxReferencedTables()).isEqualTo(1);
@@ -44,13 +42,15 @@ class AiSettingsTest {
         assertThat(settings.temperature()).isEqualTo(2.0);
         assertThat(settings.timeoutSeconds()).isEqualTo(AiSettings.MIN_TIMEOUT_SECONDS);
         assertThat(settings.timeout()).isEqualTo(Duration.ofSeconds(AiSettings.MIN_TIMEOUT_SECONDS));
+        assertThat(settings.endpoints()).hasSize(1);
+        assertThat(settings.endpoints().get(0).baseUrl()).isEqualTo("https://example.com/v1");
+        assertThat(settings.endpoints().get(0).models()).containsExactly("m1");
     }
 
     @Test
-    void toChatRequestOptionsKeepsSampleRowControlsDormantWhenFeatureIsDisabled() {
+    void effectiveEndpointsAlwaysContainBuiltinOpenAiConfig() {
         AiSettings settings = new AiSettings(
-            "https://example.com",
-            "model",
+            List.of(LlmEndpointConfig.user("e1", "https://custom.example/v1", List.of("custom-model"))),
             "prompt",
             42,
             8,
@@ -67,6 +67,10 @@ class AiSettingsTest {
             120
         );
 
+        assertThat(settings.effectiveEndpoints()).hasSize(2);
+        assertThat(settings.effectiveEndpoints().get(0).id()).isEqualTo(AiSettings.BUILTIN_OPENAI_ENDPOINT_ID);
+        assertThat(settings.effectiveEndpoints().get(0).baseUrl()).isEqualTo(AiSettings.BUILTIN_OPENAI_BASE_URL);
+        assertThat(settings.effectiveEndpoints().get(0).models()).containsExactly("gpt-5", "gpt-5-mini", "gpt-5-nano");
         assertThat(settings.toChatRequestOptions().includeSampleRows()).isFalse();
         assertThat(settings.toChatRequestOptions().sampleRowLimit()).isEqualTo(AiSettings.DEFAULT_SAMPLE_ROW_LIMIT);
         assertThat(settings.toChatRequestOptions().maxColumnsPerSample()).isEqualTo(AiSettings.DEFAULT_MAX_COLUMNS_PER_SAMPLE);
@@ -74,10 +78,38 @@ class AiSettingsTest {
     }
 
     @Test
+    void resolveSelectionFallsBackToFirstSendableCombination() {
+        AiSettings settings = new AiSettings(
+            List.of(
+                LlmEndpointConfig.user("empty", "https://empty.example/v1", List.of()),
+                LlmEndpointConfig.user("custom", "https://custom.example/v1", List.of("m1", "m2"))
+            ),
+            "prompt",
+            1,
+            1,
+            1,
+            true,
+            false,
+            1,
+            100,
+            1,
+            1,
+            LlmLogMode.OFF,
+            false,
+            0.0,
+            100
+        );
+
+        AiSettings.EndpointSelection selection = settings.resolveSelection("unknown", "unknown");
+
+        assertThat(selection.endpoint().id()).isEqualTo(AiSettings.BUILTIN_OPENAI_ENDPOINT_ID);
+        assertThat(selection.modelName()).isEqualTo("gpt-5");
+    }
+
+    @Test
     void clampsTimeoutToConfiguredBounds() {
         AiSettings tooSmall = new AiSettings(
-            "https://example.com",
-            "model",
+            List.of(),
             "prompt",
             1,
             1,
@@ -94,8 +126,7 @@ class AiSettingsTest {
             5
         );
         AiSettings tooLarge = new AiSettings(
-            "https://example.com",
-            "model",
+            List.of(),
             "prompt",
             1,
             1,

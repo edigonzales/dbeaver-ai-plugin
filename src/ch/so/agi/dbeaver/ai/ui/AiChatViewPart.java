@@ -7,6 +7,7 @@ import ch.so.agi.dbeaver.ai.chat.ChatUiListener;
 import ch.so.agi.dbeaver.ai.config.AiPreferenceConstants;
 import ch.so.agi.dbeaver.ai.config.AiSettings;
 import ch.so.agi.dbeaver.ai.config.AiSettingsService;
+import ch.so.agi.dbeaver.ai.config.LlmEndpointConfig;
 import ch.so.agi.dbeaver.ai.context.ContextAssembler;
 import ch.so.agi.dbeaver.ai.context.ContextEnricher;
 import ch.so.agi.dbeaver.ai.context.DBeaverSampleRowsCollector;
@@ -49,6 +50,7 @@ import org.eclipse.swt.custom.SashForm;
 import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.layout.GridLayout;
 import org.eclipse.swt.widgets.Button;
+import org.eclipse.swt.widgets.Combo;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.FileDialog;
@@ -63,6 +65,7 @@ import org.eclipse.ui.part.ViewPart;
 import java.io.IOException;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -103,6 +106,8 @@ public final class AiChatViewPart extends ViewPart implements ISaveablePart {
     private SashForm verticalSashForm;
     private Text transcriptText;
     private Text inputText;
+    private Combo endpointCombo;
+    private Combo modelCombo;
     private Button sendButton;
     private Button stopButton;
     private ProgressBar busyProgressBar;
@@ -120,6 +125,8 @@ public final class AiChatViewPart extends ViewPart implements ISaveablePart {
     private boolean awaitingFirstAssistantChunk;
     private int assistantContentOffset = -1;
     private int assistantContentLength;
+    private boolean busyState;
+    private List<LlmEndpointConfig> selectableEndpoints = List.of();
 
     private final DBPEventListener mentionDataSourceListener = event -> {
         if (event == null) {
@@ -164,6 +171,20 @@ public final class AiChatViewPart extends ViewPart implements ISaveablePart {
         inputGd.heightHint = 120;
         inputText.setLayoutData(inputGd);
         inputText.addModifyListener(e -> refreshDocumentState());
+
+        Composite endpointRow = new Composite(promptArea, SWT.NONE);
+        endpointRow.setLayout(new GridLayout(4, false));
+        endpointRow.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, true, false));
+
+        Label endpointLabel = new Label(endpointRow, SWT.NONE);
+        endpointLabel.setText("Endpoint");
+        endpointCombo = new Combo(endpointRow, SWT.DROP_DOWN | SWT.READ_ONLY);
+        endpointCombo.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, true, false));
+
+        Label modelLabel = new Label(endpointRow, SWT.NONE);
+        modelLabel.setText("Model");
+        modelCombo = new Combo(endpointRow, SWT.DROP_DOWN | SWT.READ_ONLY);
+        modelCombo.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, true, false));
 
         Composite buttonRow = new Composite(promptArea, SWT.NONE);
         buttonRow.setLayout(new GridLayout(4, false));
@@ -212,6 +233,8 @@ public final class AiChatViewPart extends ViewPart implements ISaveablePart {
         stopButton.addListener(SWT.Selection, e -> stopPrompt());
         clearContextButton.addListener(SWT.Selection, e -> clearContext());
         refreshMentionsButton.addListener(SWT.Selection, e -> refreshMentions());
+        endpointCombo.addListener(SWT.Selection, e -> onEndpointSelectionChanged());
+        modelCombo.addListener(SWT.Selection, e -> onModelSelectionChanged());
 
         inputText.addListener(SWT.KeyDown, e -> {
             if ((e.stateMask & SWT.MOD1) != 0 && (e.keyCode == SWT.CR || e.keyCode == SWT.KEYPAD_CR)) {
@@ -222,6 +245,7 @@ public final class AiChatViewPart extends ViewPart implements ISaveablePart {
 
         promptDocumentState.resetToUntitled("");
         refreshDocumentState();
+        reloadEndpointSelectionControls();
         resetTranscriptToInitialState();
     }
 
@@ -229,6 +253,7 @@ public final class AiChatViewPart extends ViewPart implements ISaveablePart {
     public void setFocus() {
         registerDataSourceListeners();
         refreshMentionsIfDirty();
+        reloadEndpointSelectionControls();
         if (inputText != null && !inputText.isDisposed()) {
             inputText.setFocus();
         }
@@ -564,6 +589,111 @@ public final class AiChatViewPart extends ViewPart implements ISaveablePart {
         }
     }
 
+    private void reloadEndpointSelectionControls() {
+        if (endpointCombo == null || endpointCombo.isDisposed() || modelCombo == null || modelCombo.isDisposed()) {
+            return;
+        }
+
+        AiSettings settings = settingsService.loadSettings();
+        selectableEndpoints = settings.effectiveEndpoints();
+        endpointCombo.removeAll();
+        for (LlmEndpointConfig endpoint : selectableEndpoints) {
+            endpointCombo.add(endpoint.builtin() ? "OpenAI (builtin)" : endpoint.baseUrl());
+        }
+
+        AiSettings.EndpointSelection selection = settings.resolveSelection(
+            readPreference(AiPreferenceConstants.PREF_CHAT_SELECTED_ENDPOINT_ID),
+            readPreference(AiPreferenceConstants.PREF_CHAT_SELECTED_MODEL)
+        );
+
+        int endpointIndex = indexOfEndpointById(selection.endpoint().id());
+        if (endpointIndex < 0 && !selectableEndpoints.isEmpty()) {
+            endpointIndex = 0;
+        }
+        if (endpointIndex >= 0 && endpointCombo.getItemCount() > endpointIndex) {
+            endpointCombo.select(endpointIndex);
+        }
+
+        updateModelComboForSelectedEndpoint(selection.modelName());
+        persistCurrentSelection();
+        updateSendButtonState();
+    }
+
+    private int indexOfEndpointById(String endpointId) {
+        for (int i = 0; i < selectableEndpoints.size(); i++) {
+            if (selectableEndpoints.get(i).id().equals(endpointId)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private void updateModelComboForSelectedEndpoint(String preferredModel) {
+        modelCombo.removeAll();
+        LlmEndpointConfig endpoint = selectedEndpoint();
+        if (endpoint == null) {
+            return;
+        }
+        for (String model : endpoint.models()) {
+            modelCombo.add(model);
+        }
+        if (modelCombo.getItemCount() == 0) {
+            return;
+        }
+
+        int preferredIndex = preferredModel == null ? -1 : modelCombo.indexOf(preferredModel);
+        modelCombo.select(preferredIndex >= 0 ? preferredIndex : 0);
+    }
+
+    private void onEndpointSelectionChanged() {
+        updateModelComboForSelectedEndpoint(readPreference(AiPreferenceConstants.PREF_CHAT_SELECTED_MODEL));
+        persistCurrentSelection();
+        updateSendButtonState();
+    }
+
+    private void onModelSelectionChanged() {
+        persistCurrentSelection();
+        updateSendButtonState();
+    }
+
+    private void persistCurrentSelection() {
+        writePreference(AiPreferenceConstants.PREF_CHAT_SELECTED_ENDPOINT_ID, selectedEndpointId());
+        writePreference(AiPreferenceConstants.PREF_CHAT_SELECTED_MODEL, selectedModelName());
+    }
+
+    private LlmEndpointConfig selectedEndpoint() {
+        int index = endpointCombo == null || endpointCombo.isDisposed() ? -1 : endpointCombo.getSelectionIndex();
+        if (index < 0 || index >= selectableEndpoints.size()) {
+            return null;
+        }
+        return selectableEndpoints.get(index);
+    }
+
+    private String selectedEndpointId() {
+        LlmEndpointConfig endpoint = selectedEndpoint();
+        return endpoint == null ? "" : endpoint.id();
+    }
+
+    private String selectedModelName() {
+        if (modelCombo == null || modelCombo.isDisposed()) {
+            return "";
+        }
+        int index = modelCombo.getSelectionIndex();
+        if (index < 0 || index >= modelCombo.getItemCount()) {
+            return "";
+        }
+        return modelCombo.getItem(index);
+    }
+
+    private void updateSendButtonState() {
+        if (sendButton == null || sendButton.isDisposed()) {
+            return;
+        }
+        boolean selectionHasModel = !selectedModelName().isEmpty();
+        boolean selectionHasToken = !selectedEndpointId().isEmpty() && settingsService.hasApiToken(selectedEndpointId());
+        sendButton.setEnabled(!busyState && selectionHasModel && selectionHasToken);
+    }
+
     private String currentPromptText() {
         if (inputText == null || inputText.isDisposed()) {
             return "";
@@ -579,10 +709,17 @@ public final class AiChatViewPart extends ViewPart implements ISaveablePart {
         }
 
         AiSettings settings = settingsService.loadSettings();
-        String apiToken = settingsService.loadApiToken();
+        AiSettings.EndpointSelection selection = settings.resolveSelection(selectedEndpointId(), selectedModelName());
+        if (!selection.isSendable()) {
+            setStatus("Für den gewählten Endpoint ist kein Modell konfiguriert.");
+            updateSendButtonState();
+            return;
+        }
 
+        String apiToken = settingsService.loadApiToken(selection.endpoint().id());
         if (apiToken.isBlank()) {
-            setStatus("Kein API-Token gesetzt. Bitte in den Preferences konfigurieren.");
+            setStatus("Kein API-Token für Endpoint gesetzt: " + selection.endpoint().baseUrl());
+            updateSendButtonState();
             return;
         }
 
@@ -595,9 +732,9 @@ public final class AiChatViewPart extends ViewPart implements ISaveablePart {
         refreshDocumentState();
 
         LlmClient llmClient = new LangChain4jOpenAiClient(
-            settings.baseUrl(),
+            selection.endpoint().baseUrl(),
             apiToken,
-            settings.model(),
+            selection.modelName(),
             settings.temperature(),
             settings.timeout(),
             settings.llmLogMode(),
@@ -782,7 +919,8 @@ public final class AiChatViewPart extends ViewPart implements ISaveablePart {
 
     private void setBusy(boolean busy, String status) {
         ui(() -> {
-            sendButton.setEnabled(!busy);
+            busyState = busy;
+            updateSendButtonState();
             sendButton.setText(busy ? SEND_BUTTON_BUSY_TEXT : SEND_BUTTON_TEXT);
             sendButton.setToolTipText(busy ? SEND_BUTTON_BUSY_TOOLTIP : SEND_BUTTON_TOOLTIP);
             stopButton.setEnabled(busy);
@@ -797,7 +935,8 @@ public final class AiChatViewPart extends ViewPart implements ISaveablePart {
             if (!isActiveController(controller)) {
                 return;
             }
-            sendButton.setEnabled(!busy);
+            busyState = busy;
+            updateSendButtonState();
             sendButton.setText(busy ? SEND_BUTTON_BUSY_TEXT : SEND_BUTTON_TEXT);
             sendButton.setToolTipText(busy ? SEND_BUTTON_BUSY_TOOLTIP : SEND_BUTTON_TOOLTIP);
             stopButton.setEnabled(busy);

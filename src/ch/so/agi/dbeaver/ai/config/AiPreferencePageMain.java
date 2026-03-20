@@ -1,6 +1,8 @@
 package ch.so.agi.dbeaver.ai.config;
 
+import org.eclipse.jface.preference.PreferencePage;
 import org.eclipse.swt.SWT;
+import org.eclipse.swt.custom.ScrolledComposite;
 import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.layout.GridLayout;
 import org.eclipse.swt.widgets.Button;
@@ -11,15 +13,17 @@ import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Text;
 import org.eclipse.ui.IWorkbench;
 import org.eclipse.ui.IWorkbenchPreferencePage;
-import org.eclipse.jface.preference.PreferencePage;
+
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 
 public final class AiPreferencePageMain extends PreferencePage implements IWorkbenchPreferencePage {
     private final AiSettingsService settingsService = new AiSettingsService();
 
-    private Text baseUrlText;
-    private Text modelText;
     private Text systemPromptText;
-    private Text apiTokenText;
     private Text sampleRowLimitText;
     private Text maxReferencedTablesText;
     private Text maxColumnsPerSampleText;
@@ -35,8 +39,11 @@ public final class AiPreferencePageMain extends PreferencePage implements IWorkb
     private Button includeDdlButton;
     private Button includeSampleRowsButton;
     private Button langchainHttpLoggingButton;
-    private Button clearTokenButton;
-    private Label tokenStatusLabel;
+
+    private ScrolledComposite endpointRowsScroller;
+    private Composite endpointRowsContainer;
+    private final List<EndpointRow> endpointRows = new ArrayList<>();
+    private Set<String> initialUserEndpointIds = Set.of();
 
     @Override
     public void init(IWorkbench workbench) {
@@ -49,8 +56,64 @@ public final class AiPreferencePageMain extends PreferencePage implements IWorkb
         root.setLayout(new GridLayout(2, false));
         root.setLayoutData(new GridData(SWT.FILL, SWT.FILL, true, true));
 
-        baseUrlText = createLabeledText(root, "Base URL", SWT.BORDER);
-        modelText = createLabeledText(root, "Model", SWT.BORDER);
+        Label endpointLabel = new Label(root, SWT.NONE);
+        endpointLabel.setText("LLM Endpoints");
+        endpointLabel.setLayoutData(new GridData(SWT.LEFT, SWT.TOP, false, false));
+
+        Composite endpointArea = new Composite(root, SWT.NONE);
+        GridLayout endpointAreaLayout = new GridLayout(1, false);
+        endpointAreaLayout.marginWidth = 0;
+        endpointAreaLayout.marginHeight = 0;
+        endpointAreaLayout.verticalSpacing = 4;
+        endpointArea.setLayout(endpointAreaLayout);
+        endpointArea.setLayoutData(new GridData(SWT.FILL, SWT.FILL, true, false));
+
+        Composite endpointHeader = new Composite(endpointArea, SWT.NONE);
+        GridLayout endpointHeaderLayout = new GridLayout(5, false);
+        endpointHeaderLayout.marginWidth = 0;
+        endpointHeaderLayout.marginHeight = 0;
+        endpointHeaderLayout.verticalSpacing = 4;
+        endpointHeaderLayout.horizontalSpacing = 8;
+        endpointHeader.setLayout(endpointHeaderLayout);
+        endpointHeader.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, true, false));
+        createHeaderLabel(endpointHeader, "Base URL");
+        createHeaderLabel(endpointHeader, "Models (comma-separated)");
+        createHeaderLabel(endpointHeader, "API Key");
+        createHeaderLabel(endpointHeader, "Key-Status");
+        createHeaderLabel(endpointHeader, "");
+
+        endpointRowsScroller = new ScrolledComposite(endpointArea, SWT.V_SCROLL | SWT.BORDER);
+        endpointRowsScroller.setExpandHorizontal(true);
+        endpointRowsScroller.setExpandVertical(true);
+        GridData endpointRowsScrollerGd = new GridData(SWT.FILL, SWT.FILL, true, false);
+        endpointRowsScrollerGd.heightHint = 210;
+        endpointRowsScroller.setLayoutData(endpointRowsScrollerGd);
+
+        endpointRowsContainer = new Composite(endpointRowsScroller, SWT.NONE);
+        GridLayout endpointRowsLayout = new GridLayout(1, false);
+        endpointRowsLayout.marginWidth = 0;
+        endpointRowsLayout.marginHeight = 0;
+        endpointRowsLayout.verticalSpacing = 4;
+        endpointRowsContainer.setLayout(endpointRowsLayout);
+        endpointRowsScroller.setContent(endpointRowsContainer);
+
+        Composite endpointActions = new Composite(endpointArea, SWT.NONE);
+        GridLayout endpointActionsLayout = new GridLayout(1, false);
+        endpointActionsLayout.marginWidth = 0;
+        endpointActionsLayout.marginHeight = 0;
+        endpointActions.setLayout(endpointActionsLayout);
+        endpointActions.setLayoutData(new GridData(SWT.LEFT, SWT.CENTER, false, false));
+
+        Button addEndpointButton = new Button(endpointActions, SWT.PUSH);
+        addEndpointButton.setText("Add Endpoint");
+        addEndpointButton.addListener(SWT.Selection, e -> {
+            addEmptyUserEndpointRow(UUID.randomUUID().toString());
+            relayoutEndpointRows();
+        });
+
+        Label endpointHintLabel = new Label(endpointArea, SWT.WRAP);
+        endpointHintLabel.setText("Der OpenAI-Endpunkt ist fix. Für API-Keys: Feld leer lassen behält den gespeicherten Key.");
+        endpointHintLabel.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, true, false));
 
         Label promptLabel = new Label(root, SWT.NONE);
         promptLabel.setText("System Prompt");
@@ -61,21 +124,6 @@ public final class AiPreferencePageMain extends PreferencePage implements IWorkb
         promptGd.heightHint = 120;
         promptGd.widthHint = 700;
         systemPromptText.setLayoutData(promptGd);
-
-        apiTokenText = createLabeledText(root, "API Token", SWT.BORDER | SWT.PASSWORD);
-        apiTokenText.setMessage("Leer lassen, um gespeicherten Token beizubehalten");
-
-        tokenStatusLabel = new Label(root, SWT.NONE);
-        tokenStatusLabel.setText("");
-        GridData statusGd = new GridData(SWT.FILL, SWT.CENTER, true, false);
-        statusGd.horizontalSpan = 2;
-        tokenStatusLabel.setLayoutData(statusGd);
-
-        clearTokenButton = new Button(root, SWT.CHECK);
-        clearTokenButton.setText("Gespeicherten API Token löschen");
-        GridData clearGd = new GridData(SWT.FILL, SWT.CENTER, true, false);
-        clearGd.horizontalSpan = 2;
-        clearTokenButton.setLayoutData(clearGd);
 
         includeDdlButton = new Button(root, SWT.CHECK);
         includeDdlButton.setText("DDL im Kontext mitsenden");
@@ -124,35 +172,47 @@ public final class AiPreferencePageMain extends PreferencePage implements IWorkb
         loggingHintLabel.setLayoutData(loggingHintGd);
 
         loadFromSettings(settingsService.loadSettings());
-        updateTokenStatus();
-
         return root;
     }
 
     @Override
     public boolean performOk() {
+        setErrorMessage(null);
         AiSettings settings = readFromForm();
+        if (settings == null) {
+            return false;
+        }
+
+        Set<String> currentUserIds = new HashSet<>();
+        for (LlmEndpointConfig endpoint : settings.endpoints()) {
+            currentUserIds.add(endpoint.id());
+        }
+
         settingsService.saveSettings(settings);
 
-        if (clearTokenButton.getSelection()) {
-            settingsService.saveApiToken("");
+        for (EndpointRow row : endpointRows) {
+            String enteredToken = row.apiKeyText.getText() == null ? "" : row.apiKeyText.getText().trim();
+            if (!enteredToken.isEmpty()) {
+                settingsService.saveApiToken(row.endpointId, enteredToken);
+                row.apiKeyText.setText("");
+            }
         }
 
-        String enteredToken = apiTokenText.getText() == null ? "" : apiTokenText.getText().trim();
-        if (!enteredToken.isEmpty()) {
-            settingsService.saveApiToken(enteredToken);
-            apiTokenText.setText("");
+        for (String removedId : initialUserEndpointIds) {
+            if (!currentUserIds.contains(removedId)) {
+                settingsService.deleteApiToken(removedId);
+            }
         }
 
-        updateTokenStatus();
+        initialUserEndpointIds = currentUserIds;
+        refreshEndpointKeyStatuses();
         return true;
     }
 
     @Override
     protected void performDefaults() {
         loadFromSettings(new AiSettings(
-            AiSettings.DEFAULT_BASE_URL,
-            AiSettings.DEFAULT_MODEL,
+            List.of(),
             AiSettings.DEFAULT_SYSTEM_PROMPT,
             AiSettings.DEFAULT_SAMPLE_ROW_LIMIT,
             AiSettings.DEFAULT_MAX_REFERENCED_TABLES,
@@ -168,14 +228,20 @@ public final class AiPreferencePageMain extends PreferencePage implements IWorkb
             AiSettings.DEFAULT_TEMPERATURE,
             AiSettings.DEFAULT_TIMEOUT_SECONDS
         ));
-        clearTokenButton.setSelection(false);
-        apiTokenText.setText("");
         super.performDefaults();
     }
 
     private void loadFromSettings(AiSettings settings) {
-        baseUrlText.setText(settings.baseUrl());
-        modelText.setText(settings.model());
+        clearEndpointRows();
+        addEndpointRow(LlmEndpointConfig.builtin(
+            AiSettings.BUILTIN_OPENAI_ENDPOINT_ID,
+            AiSettings.BUILTIN_OPENAI_BASE_URL,
+            AiSettings.BUILTIN_OPENAI_MODELS
+        ));
+        for (LlmEndpointConfig endpoint : settings.endpoints()) {
+            addEndpointRow(endpoint);
+        }
+
         systemPromptText.setText(settings.systemPrompt());
 
         sampleRowLimitText.setText(Integer.toString(settings.sampleRowLimit()));
@@ -195,12 +261,42 @@ public final class AiPreferencePageMain extends PreferencePage implements IWorkb
         sampleRowLimitText.setEnabled(false);
         maxColumnsPerSampleText.setEnabled(false);
         langchainHttpLoggingButton.setSelection(settings.langchainHttpLogging());
+
+        Set<String> ids = new HashSet<>();
+        for (LlmEndpointConfig endpoint : settings.endpoints()) {
+            ids.add(endpoint.id());
+        }
+        initialUserEndpointIds = ids;
+        refreshEndpointKeyStatuses();
+        relayoutEndpointRows();
     }
 
     private AiSettings readFromForm() {
+        List<LlmEndpointConfig> userEndpoints = new ArrayList<>();
+        Set<String> seenBaseUrls = new HashSet<>();
+
+        for (EndpointRow row : endpointRows) {
+            if (row.builtin) {
+                continue;
+            }
+            String baseUrl = safeTrim(row.baseUrlText.getText(), "");
+            if (baseUrl.isEmpty()) {
+                setErrorMessage("Base URL darf nicht leer sein.");
+                return null;
+            }
+
+            String dedupe = baseUrl.toLowerCase();
+            if (!seenBaseUrls.add(dedupe)) {
+                setErrorMessage("Doppelte Base URL ist nicht erlaubt: " + baseUrl);
+                return null;
+            }
+
+            List<String> models = AiSettingsService.parseModelsCsv(row.modelsText.getText());
+            userEndpoints.add(LlmEndpointConfig.user(row.endpointId, baseUrl, models));
+        }
+
         return new AiSettings(
-            safeTrim(baseUrlText.getText(), AiSettings.DEFAULT_BASE_URL),
-            safeTrim(modelText.getText(), AiSettings.DEFAULT_MODEL),
+            userEndpoints,
             safeTrim(systemPromptText.getText(), AiSettings.DEFAULT_SYSTEM_PROMPT),
             parseIntOrDefault(sampleRowLimitText.getText(), AiSettings.DEFAULT_SAMPLE_ROW_LIMIT),
             parseIntOrDefault(maxReferencedTablesText.getText(), AiSettings.DEFAULT_MAX_REFERENCED_TABLES),
@@ -218,11 +314,108 @@ public final class AiPreferencePageMain extends PreferencePage implements IWorkb
         );
     }
 
-    private void updateTokenStatus() {
-        tokenStatusLabel.setText(settingsService.hasApiToken()
-            ? "API Token ist im Secret Store gespeichert"
-            : "Kein API Token gespeichert");
-        tokenStatusLabel.getParent().layout(true, true);
+    private void clearEndpointRows() {
+        for (EndpointRow row : endpointRows) {
+            if (!row.container.isDisposed()) {
+                row.container.dispose();
+            }
+        }
+        endpointRows.clear();
+    }
+
+    private void addEndpointRow(LlmEndpointConfig endpoint) {
+        addEndpointRow(endpoint.id(), endpoint.builtin(), endpoint.baseUrl(), endpoint.models());
+    }
+
+    private void addEmptyUserEndpointRow(String endpointId) {
+        addEndpointRow(endpointId, false, "", List.of());
+    }
+
+    private void addEndpointRow(String endpointId, boolean builtin, String baseUrl, List<String> models) {
+        Composite row = new Composite(endpointRowsContainer, SWT.NONE);
+        GridLayout rowLayout = new GridLayout(5, false);
+        rowLayout.marginWidth = 0;
+        rowLayout.marginHeight = 0;
+        rowLayout.verticalSpacing = 4;
+        rowLayout.horizontalSpacing = 8;
+        row.setLayout(rowLayout);
+        row.setLayoutData(new GridData(SWT.FILL, SWT.TOP, true, false));
+
+        Text baseUrlText = new Text(row, SWT.BORDER);
+        baseUrlText.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, true, false));
+        baseUrlText.setText(baseUrl == null ? "" : baseUrl);
+
+        Text modelsText = new Text(row, SWT.BORDER);
+        modelsText.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, true, false));
+        modelsText.setText(models == null ? "" : String.join(", ", models));
+
+        Text apiKeyText = new Text(row, SWT.BORDER | SWT.PASSWORD);
+        apiKeyText.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, true, false));
+        apiKeyText.setMessage("Neuen Key setzen...");
+
+        Label keyStatusLabel = new Label(row, SWT.NONE);
+        GridData keyStatusGd = new GridData(SWT.FILL, SWT.CENTER, false, false);
+        keyStatusGd.widthHint = 130;
+        keyStatusLabel.setLayoutData(keyStatusGd);
+
+        Button removeButton = new Button(row, SWT.PUSH);
+        removeButton.setText("Remove");
+        GridData removeButtonGd = new GridData(SWT.FILL, SWT.CENTER, false, false);
+        removeButtonGd.widthHint = 90;
+        removeButton.setLayoutData(removeButtonGd);
+
+        EndpointRow endpointRow = new EndpointRow(endpointId, builtin, row, baseUrlText, modelsText, apiKeyText, keyStatusLabel);
+        endpointRows.add(endpointRow);
+
+        if (builtin) {
+            baseUrlText.setEnabled(false);
+            modelsText.setEnabled(false);
+            removeButton.setEnabled(false);
+            removeButton.setText("Fixed");
+        } else {
+            removeButton.addListener(SWT.Selection, e -> {
+                endpointRows.remove(endpointRow);
+                row.dispose();
+                relayoutEndpointRows();
+            });
+        }
+
+        updateKeyStatus(endpointRow);
+        relayoutEndpointRows();
+    }
+
+    private void refreshEndpointKeyStatuses() {
+        for (EndpointRow row : endpointRows) {
+            updateKeyStatus(row);
+        }
+    }
+
+    private void updateKeyStatus(EndpointRow row) {
+        row.keyStatusLabel.setText(settingsService.hasApiToken(row.endpointId)
+            ? "Key gespeichert"
+            : "Kein Key");
+        row.keyStatusLabel.getParent().layout(true, true);
+    }
+
+    private void relayoutEndpointRows() {
+        if (endpointRowsContainer == null || endpointRowsContainer.isDisposed()) {
+            return;
+        }
+        endpointRowsContainer.layout(true, true);
+        if (endpointRowsScroller != null && !endpointRowsScroller.isDisposed()) {
+            endpointRowsScroller.setMinSize(endpointRowsContainer.computeSize(SWT.DEFAULT, SWT.DEFAULT));
+            endpointRowsScroller.layout(true, true);
+            Composite parent = endpointRowsScroller.getParent();
+            if (parent != null && !parent.isDisposed()) {
+                parent.layout(true, true);
+            }
+        }
+    }
+
+    private void createHeaderLabel(Composite parent, String text) {
+        Label label = new Label(parent, SWT.NONE);
+        label.setText(text);
+        label.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, true, false));
     }
 
     private Text createLabeledText(Composite parent, String label, int style) {
@@ -272,5 +465,16 @@ public final class AiPreferencePageMain extends PreferencePage implements IWorkb
 
     private LlmLogMode parseLlmLogMode(String value) {
         return LlmLogMode.fromPreferenceValue(value);
+    }
+
+    private record EndpointRow(
+        String endpointId,
+        boolean builtin,
+        Composite container,
+        Text baseUrlText,
+        Text modelsText,
+        Text apiKeyText,
+        Label keyStatusLabel
+    ) {
     }
 }

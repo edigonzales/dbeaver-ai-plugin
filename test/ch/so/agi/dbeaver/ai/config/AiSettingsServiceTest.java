@@ -15,47 +15,41 @@ class AiSettingsServiceTest {
     @Test
     void loadSettings_returnsDefaultsWhenPreferencesAreEmpty() {
         InMemoryPreferenceStore store = new InMemoryPreferenceStore();
-        AiSettingsService service = new AiSettingsService();
-        AiSettings settings = service.loadSettings(store);
+        AiSettings settings = new AiSettingsService().loadSettings(store);
 
-        assertThat(settings.baseUrl()).isEqualTo(AiSettings.DEFAULT_BASE_URL);
-        assertThat(settings.model()).isEqualTo(AiSettings.DEFAULT_MODEL);
+        assertThat(settings.effectiveEndpoints()).hasSize(1);
+        assertThat(settings.effectiveEndpoints().get(0).id()).isEqualTo(AiSettings.BUILTIN_OPENAI_ENDPOINT_ID);
         assertThat(settings.systemPrompt()).isEqualTo(AiSettings.DEFAULT_SYSTEM_PROMPT);
-        assertThat(settings.sampleRowLimit()).isEqualTo(AiSettings.DEFAULT_SAMPLE_ROW_LIMIT);
-        assertThat(settings.maxReferencedTables()).isEqualTo(AiSettings.DEFAULT_MAX_REFERENCED_TABLES);
-        assertThat(settings.maxColumnsPerSample()).isEqualTo(AiSettings.DEFAULT_MAX_COLUMNS_PER_SAMPLE);
-        assertThat(settings.includeDdl()).isEqualTo(AiSettings.DEFAULT_INCLUDE_DDL);
-        assertThat(settings.includeSampleRows()).isFalse();
-        assertThat(settings.historySize()).isEqualTo(AiSettings.DEFAULT_HISTORY_SIZE);
-        assertThat(settings.maxContextTokens()).isEqualTo(AiSettings.DEFAULT_MAX_CONTEXT_TOKENS);
-        assertThat(settings.mentionProposalLimit()).isEqualTo(AiSettings.DEFAULT_MENTION_PROPOSAL_LIMIT);
-        assertThat(settings.mentionCandidateLimit()).isEqualTo(AiSettings.DEFAULT_MENTION_CANDIDATE_LIMIT);
-        assertThat(settings.llmLogMode()).isEqualTo(AiSettings.DEFAULT_LLM_LOG_MODE);
-        assertThat(settings.langchainHttpLogging()).isEqualTo(AiSettings.DEFAULT_LANGCHAIN_HTTP_LOGGING);
-        assertThat(settings.temperature()).isEqualTo(AiSettings.DEFAULT_TEMPERATURE);
         assertThat(settings.timeoutSeconds()).isEqualTo(AiSettings.DEFAULT_TIMEOUT_SECONDS);
     }
 
     @Test
-    void loadSettings_ignoresLegacyStoredIncludeSampleRowsFlag() {
+    void loadSettings_usesProvidedEndpointValuesAndDedupesModels() {
         InMemoryPreferenceStore store = new InMemoryPreferenceStore();
-        store.setValue(AiPreferenceConstants.PREF_INCLUDE_SAMPLE_ROWS, true);
-        store.setValue(AiPreferenceConstants.PREF_INCLUDE_DDL, true);
-        store.setValue(AiPreferenceConstants.PREF_SAMPLE_ROW_LIMIT, 11);
+        store.setValue(AiPreferenceConstants.PREF_LLM_ENDPOINT_COUNT, 2);
+        store.setValue(AiPreferenceConstants.PREF_LLM_ENDPOINT_ID_PREFIX + "0.id", "ep-1");
+        store.setValue(AiPreferenceConstants.PREF_LLM_ENDPOINT_ID_PREFIX + "0.baseUrl", "https://custom.api/v1");
+        store.setValue(AiPreferenceConstants.PREF_LLM_ENDPOINT_ID_PREFIX + "0.models", "m1, m2, m1");
+        store.setValue(AiPreferenceConstants.PREF_LLM_ENDPOINT_ID_PREFIX + "1.id", "ep-2");
+        store.setValue(AiPreferenceConstants.PREF_LLM_ENDPOINT_ID_PREFIX + "1.baseUrl", "https://custom.api/v1");
+        store.setValue(AiPreferenceConstants.PREF_LLM_ENDPOINT_ID_PREFIX + "1.models", "x");
 
         AiSettings settings = new AiSettingsService().loadSettings(store);
 
-        assertThat(settings.includeSampleRows()).isFalse();
-        assertThat(settings.includeDdl()).isTrue();
-        assertThat(settings.sampleRowLimit()).isEqualTo(11);
+        assertThat(settings.endpoints()).hasSize(1);
+        assertThat(settings.endpoints().get(0).id()).isEqualTo("ep-1");
+        assertThat(settings.endpoints().get(0).baseUrl()).isEqualTo("https://custom.api/v1");
+        assertThat(settings.endpoints().get(0).models()).containsExactly("m1", "m2");
     }
 
     @Test
-    void saveSettings_persistsFalseForDisabledSampleRowsFlag() {
+    void saveSettings_persistsUserEndpointsAndGeneralSettings() {
         InMemoryPreferenceStore store = new InMemoryPreferenceStore();
         AiSettings settings = new AiSettings(
-            "https://custom.api.example.com/v1",
-            "gpt-4-turbo",
+            java.util.List.of(
+                LlmEndpointConfig.user("ep-1", "https://one.example/v1", java.util.List.of("a", "b")),
+                LlmEndpointConfig.user("ep-2", "https://two.example/v1", java.util.List.of())
+            ),
             "Custom system prompt",
             10,
             5,
@@ -71,76 +65,45 @@ class AiSettingsServiceTest {
             1.5,
             123
         );
-        AiSettingsService service = new AiSettingsService();
 
+        AiSettingsService service = new AiSettingsService();
         service.saveSettings(store, settings);
 
-        assertThat(store.getBoolean(AiPreferenceConstants.PREF_INCLUDE_SAMPLE_ROWS)).isFalse();
+        assertThat(store.getInt(AiPreferenceConstants.PREF_LLM_ENDPOINT_COUNT)).isEqualTo(2);
+        assertThat(store.getString(AiPreferenceConstants.PREF_LLM_ENDPOINT_ID_PREFIX + "0.id")).isEqualTo("ep-1");
+        assertThat(store.getString(AiPreferenceConstants.PREF_LLM_ENDPOINT_ID_PREFIX + "0.baseUrl")).isEqualTo("https://one.example/v1");
+        assertThat(store.getString(AiPreferenceConstants.PREF_LLM_ENDPOINT_ID_PREFIX + "0.models")).isEqualTo("a,b");
+        assertThat(store.getString(AiPreferenceConstants.PREF_LLM_ENDPOINT_ID_PREFIX + "1.models")).isEqualTo("");
         assertThat(store.getInt(AiPreferenceConstants.PREF_TIMEOUT_SECONDS)).isEqualTo(123);
         assertThat(store.saved).isTrue();
     }
 
     @Test
-    void loadSettings_usesProvidedValuesWhenSet() {
+    void loadSettings_ignoresLegacyBaseUrlAndModelPreferences() {
         InMemoryPreferenceStore store = new InMemoryPreferenceStore();
-        String customBaseUrl = "https://custom.api.example.com/v1";
-        String customModel = "gpt-4-turbo";
-        String customPrompt = "Custom system prompt";
-        store.setValue(AiPreferenceConstants.PREF_BASE_URL, customBaseUrl);
-        store.setValue(AiPreferenceConstants.PREF_MODEL, customModel);
-        store.setValue(AiPreferenceConstants.PREF_SYSTEM_PROMPT, customPrompt);
-        store.setValue(AiPreferenceConstants.PREF_SAMPLE_ROW_LIMIT, 10);
-        store.setValue(AiPreferenceConstants.PREF_MAX_REFERENCED_TABLES, 5);
-        store.setValue(AiPreferenceConstants.PREF_MAX_COLUMNS_PER_SAMPLE, 20);
-        store.setValue(AiPreferenceConstants.PREF_INCLUDE_DDL, false);
-        store.setValue(AiPreferenceConstants.PREF_INCLUDE_SAMPLE_ROWS, true);
-        store.setValue(AiPreferenceConstants.PREF_HISTORY_SIZE, 20);
-        store.setValue(AiPreferenceConstants.PREF_MAX_CONTEXT_TOKENS, 8000);
-        store.setValue(AiPreferenceConstants.PREF_MENTION_PROPOSAL_LIMIT, 50);
-        store.setValue(AiPreferenceConstants.PREF_MENTION_CANDIDATE_LIMIT, 60);
-        store.setValue(AiPreferenceConstants.PREF_LLM_LOG_MODE, LlmLogMode.FULL.name());
-        store.setValue(AiPreferenceConstants.PREF_LANGCHAIN_HTTP_LOGGING, true);
-        store.setValue(AiPreferenceConstants.PREF_TEMPERATURE, "1.5");
-        store.setValue(AiPreferenceConstants.PREF_TIMEOUT_SECONDS, 240);
+        store.setValue("ch.so.agi.dbeaver.ai.baseUrl", "https://legacy.example/v1");
+        store.setValue("ch.so.agi.dbeaver.ai.model", "legacy-model");
 
         AiSettings settings = new AiSettingsService().loadSettings(store);
 
-        assertThat(settings.baseUrl()).isEqualTo(customBaseUrl);
-        assertThat(settings.model()).isEqualTo(customModel);
-        assertThat(settings.systemPrompt()).isEqualTo(customPrompt);
-        assertThat(settings.sampleRowLimit()).isEqualTo(10);
-        assertThat(settings.maxReferencedTables()).isEqualTo(5);
-        assertThat(settings.maxColumnsPerSample()).isEqualTo(20);
-        assertThat(settings.includeDdl()).isFalse();
-        assertThat(settings.includeSampleRows()).isFalse();
-        assertThat(settings.historySize()).isEqualTo(20);
-        assertThat(settings.maxContextTokens()).isEqualTo(8000);
-        assertThat(settings.mentionProposalLimit()).isEqualTo(50);
-        assertThat(settings.mentionCandidateLimit()).isEqualTo(60);
-        assertThat(settings.llmLogMode()).isEqualTo(LlmLogMode.FULL);
-        assertThat(settings.langchainHttpLogging()).isTrue();
-        assertThat(settings.temperature()).isEqualTo(1.5);
-        assertThat(settings.timeoutSeconds()).isEqualTo(240);
+        assertThat(settings.endpoints()).isEmpty();
+        assertThat(settings.effectiveEndpoints().get(0).baseUrl()).isEqualTo(AiSettings.BUILTIN_OPENAI_BASE_URL);
     }
 
     @Test
-    void loadSettings_usesDefaultTimeoutWhenStoredValueIsInvalid() {
-        InMemoryPreferenceStore store = new InMemoryPreferenceStore();
-        store.setValue(AiPreferenceConstants.PREF_TIMEOUT_SECONDS, 1);
+    void secretKeyForEndpoint_usesBuiltinAndEndpointSpecificKeys() {
+        AiSettingsService service = new AiSettingsService();
 
-        AiSettings settings = new AiSettingsService().loadSettings(store);
-
-        assertThat(settings.timeoutSeconds()).isEqualTo(AiSettings.DEFAULT_TIMEOUT_SECONDS);
+        assertThat(service.secretKeyForEndpoint(AiSettings.BUILTIN_OPENAI_ENDPOINT_ID))
+            .isEqualTo(AiPreferenceConstants.SECRET_OPENAI_API_TOKEN);
+        assertThat(service.secretKeyForEndpoint("abc-123"))
+            .isEqualTo("ch.so.agi.dbeaver.ai.endpoint.abc-123.apiToken");
     }
 
     @Test
-    void loadSettings_usesDefaultTimeoutWhenStoredValueIsNotANumber() {
-        InMemoryPreferenceStore store = new InMemoryPreferenceStore();
-        store.setValue(AiPreferenceConstants.PREF_TIMEOUT_SECONDS, "abc");
-
-        AiSettings settings = new AiSettingsService().loadSettings(store);
-
-        assertThat(settings.timeoutSeconds()).isEqualTo(AiSettings.DEFAULT_TIMEOUT_SECONDS);
+    void parseModelsCsv_trimsAndDeduplicates() {
+        assertThat(AiSettingsService.parseModelsCsv("a, b, ,a"))
+            .containsExactly("a", "b");
     }
 
     private static final class InMemoryPreferenceStore implements DBPPreferenceStore {

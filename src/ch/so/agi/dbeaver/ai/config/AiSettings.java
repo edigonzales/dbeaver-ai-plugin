@@ -3,11 +3,16 @@ package ch.so.agi.dbeaver.ai.config;
 import ch.so.agi.dbeaver.ai.chat.ChatRequestOptions;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Objects;
 
 public final class AiSettings {
-    public static final String DEFAULT_BASE_URL = "https://api.infomaniak.com/2/ai/103965/openai/v1/";
-    public static final String DEFAULT_MODEL = "qwen3";
+    public static final String BUILTIN_OPENAI_ENDPOINT_ID = "builtin-openai";
+    public static final String BUILTIN_OPENAI_BASE_URL = "https://api.openai.com/v1";
+    public static final List<String> BUILTIN_OPENAI_MODELS = List.of("gpt-5", "gpt-5-mini", "gpt-5-nano");
+
     public static final String DEFAULT_SYSTEM_PROMPT = "Du bist ein Datenbank-Assistent und hilfst primaer beim Entwerfen, Debuggen und Optimieren herausfordernder SQL-Abfragen. Antworte immer auf Deutsch. Wenn du eine SQL-Abfrage lieferst, MUSS sie in einem ```sql```-Codeblock stehen. Zu jeder SQL-Abfrage MUSS eine kurze Erklaerung mitgeliefert werden (Zweck, zentrale Join-/Filter-/Aggregationslogik, Annahmen). Nutze bereitgestellten Tabellenkontext, insbesondere DDL, vorrangig und nenne fehlende Informationen explizit.";
     public static final int DEFAULT_SAMPLE_ROW_LIMIT = 5;
     public static final int DEFAULT_MAX_REFERENCED_TABLES = 8;
@@ -25,8 +30,10 @@ public final class AiSettings {
     public static final LlmLogMode DEFAULT_LLM_LOG_MODE = LlmLogMode.METADATA;
     public static final boolean DEFAULT_LANGCHAIN_HTTP_LOGGING = false;
 
-    private final String baseUrl;
-    private final String model;
+    private static final LlmEndpointConfig BUILTIN_OPENAI_ENDPOINT =
+        LlmEndpointConfig.builtin(BUILTIN_OPENAI_ENDPOINT_ID, BUILTIN_OPENAI_BASE_URL, BUILTIN_OPENAI_MODELS);
+
+    private final List<LlmEndpointConfig> endpoints;
     private final String systemPrompt;
     private final int sampleRowLimit;
     private final int maxReferencedTables;
@@ -43,8 +50,7 @@ public final class AiSettings {
     private final double temperature;
 
     public AiSettings(
-        String baseUrl,
-        String model,
+        List<LlmEndpointConfig> endpoints,
         String systemPrompt,
         int sampleRowLimit,
         int maxReferencedTables,
@@ -60,8 +66,7 @@ public final class AiSettings {
         double temperature,
         int timeoutSeconds
     ) {
-        this.baseUrl = normalizeOrDefault(baseUrl, DEFAULT_BASE_URL);
-        this.model = normalizeOrDefault(model, DEFAULT_MODEL);
+        this.endpoints = List.copyOf(normalizeUserEndpoints(endpoints));
         this.systemPrompt = normalizeOrDefault(systemPrompt, DEFAULT_SYSTEM_PROMPT);
         this.sampleRowLimit = Math.max(1, sampleRowLimit);
         this.maxReferencedTables = Math.max(1, maxReferencedTables);
@@ -76,6 +81,30 @@ public final class AiSettings {
         this.llmLogMode = llmLogMode == null ? DEFAULT_LLM_LOG_MODE : llmLogMode;
         this.langchainHttpLogging = langchainHttpLogging;
         this.temperature = clampTemperature(temperature);
+    }
+
+    private static List<LlmEndpointConfig> normalizeUserEndpoints(List<LlmEndpointConfig> values) {
+        if (values == null || values.isEmpty()) {
+            return List.of();
+        }
+        List<LlmEndpointConfig> result = new ArrayList<>();
+        LinkedHashSet<String> seenBaseUrls = new LinkedHashSet<>();
+        for (LlmEndpointConfig value : values) {
+            if (value == null || value.builtin()) {
+                continue;
+            }
+            String normalizedUrl = normalizeOrDefault(value.baseUrl(), "");
+            if (normalizedUrl.isEmpty()) {
+                continue;
+            }
+            String dedupeKey = normalizedUrl.toLowerCase();
+            if (seenBaseUrls.contains(dedupeKey)) {
+                continue;
+            }
+            seenBaseUrls.add(dedupeKey);
+            result.add(LlmEndpointConfig.user(value.id(), normalizedUrl, value.models()));
+        }
+        return result;
     }
 
     private static String normalizeOrDefault(String value, String fallback) {
@@ -100,12 +129,58 @@ public final class AiSettings {
         return false;
     }
 
-    public String baseUrl() {
-        return baseUrl;
+    public List<LlmEndpointConfig> endpoints() {
+        return endpoints;
     }
 
-    public String model() {
-        return model;
+    public List<LlmEndpointConfig> effectiveEndpoints() {
+        List<LlmEndpointConfig> result = new ArrayList<>();
+        result.add(BUILTIN_OPENAI_ENDPOINT);
+        result.addAll(endpoints);
+        return List.copyOf(result);
+    }
+
+    public LlmEndpointConfig findById(String endpointId) {
+        if (endpointId == null || endpointId.isBlank()) {
+            return null;
+        }
+        for (LlmEndpointConfig endpoint : effectiveEndpoints()) {
+            if (endpoint.id().equals(endpointId)) {
+                return endpoint;
+            }
+        }
+        return null;
+    }
+
+    public EndpointSelection resolveSelection(String endpointId, String modelName) {
+        List<LlmEndpointConfig> available = effectiveEndpoints();
+        if (available.isEmpty()) {
+            throw new IllegalStateException("No LLM endpoints configured");
+        }
+
+        LlmEndpointConfig selectedEndpoint = findById(endpointId);
+        if (selectedEndpoint == null) {
+            selectedEndpoint = available.get(0);
+        }
+
+        String selectedModel = normalizeOrDefault(modelName, "");
+        if (selectedModel.isEmpty() || !selectedEndpoint.models().contains(selectedModel)) {
+            if (!selectedEndpoint.models().isEmpty()) {
+                selectedModel = selectedEndpoint.models().get(0);
+            } else {
+                selectedModel = "";
+            }
+        }
+
+        if (selectedModel.isEmpty()) {
+            for (LlmEndpointConfig endpoint : available) {
+                if (!endpoint.models().isEmpty()) {
+                    return new EndpointSelection(endpoint, endpoint.models().get(0));
+                }
+            }
+        }
+
+        return new EndpointSelection(selectedEndpoint, selectedModel);
     }
 
     public String systemPrompt() {
@@ -184,8 +259,7 @@ public final class AiSettings {
 
     public AiSettings withTemperature(double value) {
         return new AiSettings(
-            baseUrl,
-            model,
+            endpoints,
             systemPrompt,
             sampleRowLimit,
             maxReferencedTables,
@@ -206,8 +280,7 @@ public final class AiSettings {
     @Override
     public int hashCode() {
         return Objects.hash(
-            baseUrl,
-            model,
+            endpoints,
             systemPrompt,
             sampleRowLimit,
             maxReferencedTables,
@@ -246,8 +319,18 @@ public final class AiSettings {
             && llmLogMode == other.llmLogMode
             && langchainHttpLogging == other.langchainHttpLogging
             && Double.compare(temperature, other.temperature) == 0
-            && baseUrl.equals(other.baseUrl)
-            && model.equals(other.model)
+            && endpoints.equals(other.endpoints)
             && systemPrompt.equals(other.systemPrompt);
+    }
+
+    public record EndpointSelection(LlmEndpointConfig endpoint, String modelName) {
+        public EndpointSelection {
+            Objects.requireNonNull(endpoint, "endpoint");
+            modelName = modelName == null ? "" : modelName.trim();
+        }
+
+        public boolean isSendable() {
+            return !modelName.isEmpty();
+        }
     }
 }
